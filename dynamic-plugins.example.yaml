@@ -1,0 +1,47 @@
+plugins:
+  # Frontend artifact produced by this repository workflow.
+  - package: https://github.com/<org>/<repo>/releases/download/build-<run_number>/backstage-finops-frontend.tgz
+    # Update integrity to match the generated .sha256 file from the same release.
+    integrity: sha256-<frontend-sha256-base64>
+    disabled: false
+    pluginConfig:
+      dynamicPlugins:
+        frontend:
+          internal.backstage-plugin-finops:
+            dynamicRoutes:
+              - path: /finops
+                importName: FinOpsPage
+                menuItem:
+                  icon: kind:resource
+                  text: FinOps
+              - path: /finops-cra
+                importName: FinOpsCRAPage
+
+  # Backend artifact produced by this repository workflow.
+  - package: https://github.com/<org>/<repo>/releases/download/build-<run_number>/backstage-finops-backend.tgz
+    integrity: sha256-<backend-sha256-base64>
+    disabled: false
+    pluginConfig:
+      proxy:
+        endpoints:
+          '/finops':
+            target: http://localhost:7007/api/finops
+            credentials: dangerously-allow-unauthenticated
+            changeOrigin: true
+      finops:
+        snowflake:
+          account: ${SNOWFLAKE_ACCOUNT}
+          user: ${SNOWFLAKE_USER}
+          password: ${SNOWFLAKE_PASSWORD}
+          # Use key-pair auth instead of password if needed:
+          # privateKeyPath: ${SNOWFLAKE_PRIVATE_KEY_PATH}
+          # privateKeyPassphrase: ${SNOWFLAKE_PRIVATE_KEY_PASSPHRASE}
+          warehouse: ${SNOWFLAKE_WAREHOUSE}
+          database: ${SNOWFLAKE_DATABASE}
+          schema: ${SNOWFLAKE_SCHEMA}
+          role: ${SNOWFLAKE_ROLE}
+          queryTag: finops-backend
+          poolMaxSize: 8
+          table: cra_scope_costs
+          dimTeamTable: cra_team_directory
+          bridgeTeamScopeTable: cra_team_attributed_scopes

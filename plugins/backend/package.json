@@ -1,0 +1,30 @@
+{
+  "name": "@internal/backstage-plugin-finops-backend",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "dist/index.cjs.js",
+  "types": "src/index.ts",
+  "backstage": {
+    "role": "backend-plugin",
+    "pluginId": "finops"
+  },
+  "scripts": {
+    "build": "backstage-cli package build",
+    "export-dynamic": "npx @red-hat-developer-hub/cli@latest plugin export",
+    "pack-dynamic": "cd dist-dynamic && npm pack"
+  },
+  "dependencies": {
+    "@backstage/backend-plugin-api": "^1.5.0",
+    "@backstage/config": "^1.3.7",
+    "express": "^4.19.2",
+    "snowflake-sdk": "^2.4.0"
+  },
+  "devDependencies": {
+    "@backstage/cli": "^0.36.1",
+    "typescript": "~5.8.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

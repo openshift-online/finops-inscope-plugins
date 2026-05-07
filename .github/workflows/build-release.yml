@@ -1,0 +1,57 @@
+name: Build Dynamic Plugin Releases
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build frontend dynamic plugin tgz
+        run: |
+          mkdir -p dist
+          cd plugins/frontend
+          npm install
+          npm run build
+          npx @red-hat-developer-hub/cli@latest plugin export
+          cd dist-dynamic
+          npm pack
+          mv *.tgz ../../../../dist/backstage-finops-frontend.tgz
+
+      - name: Build backend dynamic plugin tgz
+        run: |
+          cd plugins/backend
+          npm install
+          npm run build
+          npx @red-hat-developer-hub/cli@latest plugin export
+          cd dist-dynamic
+          npm pack
+          mv *.tgz ../../../../dist/backstage-finops-backend.tgz
+
+      - name: Write checksums
+        run: |
+          sha256sum dist/backstage-finops-frontend.tgz > dist/backstage-finops-frontend.tgz.sha256
+          sha256sum dist/backstage-finops-backend.tgz > dist/backstage-finops-backend.tgz.sha256
+
+      - name: Create GitHub release with tgz artifacts
+        uses: ncipollo/release-action@v1
+        with:
+          tag: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          commit: ${{ github.sha }}
+          artifacts: "dist/backstage-finops-frontend.tgz,dist/backstage-finops-backend.tgz,dist/backstage-finops-frontend.tgz.sha256,dist/backstage-finops-backend.tgz.sha256"
+          generateReleaseNotes: true
