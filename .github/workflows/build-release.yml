@@ -33,7 +33,7 @@ jobs:
           npx @red-hat-developer-hub/cli@latest plugin export
           cd dist-dynamic
           npm pack
-          mv *.tgz ../../../../dist/backstage-finops-frontend.tgz
+          mv *.tgz ../../../dist/backstage-finops-frontend.tgz
 
       - name: Build backend dynamic plugin tgz
         run: |
@@ -46,7 +46,7 @@ jobs:
           npx @red-hat-developer-hub/cli@latest plugin export
           cd dist-dynamic
           npm pack
-          mv *.tgz ../../../../dist/backstage-finops-backend.tgz
+          mv *.tgz ../../../dist/backstage-finops-backend.tgz
 
       - name: Write checksums
         run: |
