@@ -25,7 +25,9 @@ jobs:
         run: |
           mkdir -p dist
           cd plugins/frontend
-          npm install
+          npm install --legacy-peer-deps
+          mkdir -p dist-types/src
+          printf 'export {}\n' > dist-types/src/index.d.ts
           npm run build
           npx @red-hat-developer-hub/cli@latest plugin export
           cd dist-dynamic
@@ -35,7 +37,9 @@ jobs:
       - name: Build backend dynamic plugin tgz
         run: |
           cd plugins/backend
-          npm install
+          npm install --legacy-peer-deps
+          mkdir -p dist-types/src
+          printf 'export {}\n' > dist-types/src/index.d.ts
           npm run build
           npx @red-hat-developer-hub/cli@latest plugin export
           cd dist-dynamic
