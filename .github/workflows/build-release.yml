@@ -26,6 +26,7 @@ jobs:
           mkdir -p dist
           cd plugins/frontend
           npm install --legacy-peer-deps --include=optional
+          npm install --no-save @rollup/rollup-linux-x64-gnu
           mkdir -p dist-types/src
           printf 'export {}\n' > dist-types/src/index.d.ts
           npm run build
@@ -38,6 +39,7 @@ jobs:
         run: |
           cd plugins/backend
           npm install --legacy-peer-deps --include=optional
+          npm install --no-save @rollup/rollup-linux-x64-gnu
           mkdir -p dist-types/src
           printf 'export {}\n' > dist-types/src/index.d.ts
           npm run build
