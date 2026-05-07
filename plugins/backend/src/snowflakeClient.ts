@@ -132,6 +132,7 @@ export class SnowflakeConnectionPool {
           }
         : {
             ...baseOptions,
+            authenticator: 'SNOWFLAKE_JWT',
             privateKeyPath: this.config.auth.privateKeyPath,
             privateKeyPass: this.config.auth.privateKeyPassphrase,
           };
