@@ -25,7 +25,7 @@ jobs:
         run: |
           mkdir -p dist
           cd plugins/frontend
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps --include=optional
           mkdir -p dist-types/src
           printf 'export {}\n' > dist-types/src/index.d.ts
           npm run build
@@ -37,7 +37,7 @@ jobs:
       - name: Build backend dynamic plugin tgz
         run: |
           cd plugins/backend
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps --include=optional
           mkdir -p dist-types/src
           printf 'export {}\n' > dist-types/src/index.d.ts
           npm run build
