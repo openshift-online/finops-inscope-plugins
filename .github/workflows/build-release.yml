@@ -27,6 +27,7 @@ jobs:
           cd plugins/frontend
           npm install --legacy-peer-deps --include=optional
           npm install --no-save --legacy-peer-deps @rollup/rollup-linux-x64-gnu
+          npm install --no-save --legacy-peer-deps @rspack/binding-linux-x64-gnu
           mkdir -p dist-types/src
           printf 'export {}\n' > dist-types/src/index.d.ts
           npm run build
@@ -40,6 +41,7 @@ jobs:
           cd plugins/backend
           npm install --legacy-peer-deps --include=optional
           npm install --no-save --legacy-peer-deps @rollup/rollup-linux-x64-gnu
+          npm install --no-save --legacy-peer-deps @rspack/binding-linux-x64-gnu
           mkdir -p dist-types/src
           printf 'export {}\n' > dist-types/src/index.d.ts
           npm run build
