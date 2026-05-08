@@ -4,6 +4,11 @@ on:
   release:
     types:
       - published
+  workflow_run:
+    workflows:
+      - Build Dynamic Plugin Releases
+    types:
+      - completed
 
 permissions:
   contents: write
@@ -11,7 +16,11 @@ permissions:
 
 jobs:
   bump-manifest:
-    if: startsWith(github.event.release.tag_name, 'build-')
+    if: |
+      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'build-')) ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.name == 'Build Dynamic Plugin Releases')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,11 +32,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          TAG="${{ github.event.release.tag_name }}"
           REPO="${{ github.repository }}"
+          EVENT_NAME="${{ github.event_name }}"
 
-          FRONTEND_URL="$(jq -r '.release.assets[] | select(.name=="backstage-finops-frontend.tgz") | .browser_download_url' "$GITHUB_EVENT_PATH")"
-          BACKEND_URL="$(jq -r '.release.assets[] | select(.name=="backstage-finops-backend.tgz") | .browser_download_url' "$GITHUB_EVENT_PATH")"
+          if [[ "${EVENT_NAME}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+            FRONTEND_URL="$(jq -r '.release.assets[] | select(.name=="backstage-finops-frontend.tgz") | .browser_download_url' "$GITHUB_EVENT_PATH")"
+            BACKEND_URL="$(jq -r '.release.assets[] | select(.name=="backstage-finops-backend.tgz") | .browser_download_url' "$GITHUB_EVENT_PATH")"
+          else
+            TAG="build-${{ github.event.workflow_run.run_number }}"
+            FRONTEND_URL="https://github.com/${REPO}/releases/download/${TAG}/backstage-finops-frontend.tgz"
+            BACKEND_URL="https://github.com/${REPO}/releases/download/${TAG}/backstage-finops-backend.tgz"
+          fi
 
           if [[ -z "${FRONTEND_URL}" || "${FRONTEND_URL}" == "null" ]]; then
             echo "Frontend artifact URL not found in release payload."
