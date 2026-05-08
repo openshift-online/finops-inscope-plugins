@@ -22,7 +22,7 @@ export const finopsCraPage = PageBlueprint.make({
   name: 'cra',
   params: {
     path: '/finops/cra',
-    title: 'FinOps Cloud Resources Allocation',
+    title: 'FinOps Cloud Resources Attribution',
     loader: () =>
       import('./components/FinOpsCRAPage').then(m => (
         <m.FinOpsCRAPage />

@@ -27,7 +27,7 @@ export type FinOpsCRAPageProps = {
 function pageChrome(children: ReactNode) {
   return (
     <>
-      <Header title="FinOps Cloud Resources Allocation" />
+      <Header title="FinOps Cloud Resources Attribution" />
       <FullPage>
         <Container py="6">{children}</Container>
       </FullPage>
@@ -73,7 +73,7 @@ export const FinOpsCRAPage = (props: FinOpsCRAPageProps = {}) => {
 
   return (
     <>
-      <Header title="FinOps Cloud Resources Allocation" />
+      <Header title="FinOps Cloud Resources Attribution" />
       <FullPage>
         <Container py="6">
           <Flex direction={{ initial: 'column', md: 'row' }} gap={{ initial: '4', md: '6' }} align="start">

@@ -1,0 +1,125 @@
+name: Bump Dynamic Plugin Manifest
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-manifest:
+    if: startsWith(github.event.release.tag_name, 'build-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute package URLs and SRI integrity
+        id: sri
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ github.event.release.tag_name }}"
+          REPO="${{ github.repository }}"
+
+          FRONTEND_URL="$(jq -r '.release.assets[] | select(.name=="backstage-finops-frontend.tgz") | .browser_download_url' "$GITHUB_EVENT_PATH")"
+          BACKEND_URL="$(jq -r '.release.assets[] | select(.name=="backstage-finops-backend.tgz") | .browser_download_url' "$GITHUB_EVENT_PATH")"
+
+          if [[ -z "${FRONTEND_URL}" || "${FRONTEND_URL}" == "null" ]]; then
+            echo "Frontend artifact URL not found in release payload."
+            exit 1
+          fi
+
+          if [[ -z "${BACKEND_URL}" || "${BACKEND_URL}" == "null" ]]; then
+            echo "Backend artifact URL not found in release payload."
+            exit 1
+          fi
+
+          mkdir -p dist
+          curl -fsSL "${FRONTEND_URL}" -o dist/backstage-finops-frontend.tgz
+          curl -fsSL "${BACKEND_URL}" -o dist/backstage-finops-backend.tgz
+
+          FRONTEND_SRI="sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-frontend.tgz | openssl base64 -A)"
+          BACKEND_SRI="sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-backend.tgz | openssl base64 -A)"
+
+          echo "frontend_package=https://github.com/${REPO}/releases/download/${TAG}/backstage-finops-frontend.tgz" >> "$GITHUB_OUTPUT"
+          echo "backend_package=https://github.com/${REPO}/releases/download/${TAG}/backstage-finops-backend.tgz" >> "$GITHUB_OUTPUT"
+          echo "frontend_sri=${FRONTEND_SRI}" >> "$GITHUB_OUTPUT"
+          echo "backend_sri=${BACKEND_SRI}" >> "$GITHUB_OUTPUT"
+
+      - name: Update test-extras.yml dynamic plugin references
+        env:
+          FRONTEND_PACKAGE: ${{ steps.sri.outputs.frontend_package }}
+          BACKEND_PACKAGE: ${{ steps.sri.outputs.backend_package }}
+          FRONTEND_SRI: ${{ steps.sri.outputs.frontend_sri }}
+          BACKEND_SRI: ${{ steps.sri.outputs.backend_sri }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          import pathlib
+          import re
+          import sys
+          import os
+
+          path = pathlib.Path("test-extras.yml")
+          content = path.read_text()
+
+          frontend_package = os.environ["FRONTEND_PACKAGE"]
+          backend_package = os.environ["BACKEND_PACKAGE"]
+          frontend_sri = os.environ["FRONTEND_SRI"]
+          backend_sri = os.environ["BACKEND_SRI"]
+
+          content = re.sub(
+              r'https://github\.com/[^"]+/releases/download/build-[^/]+/backstage-finops-frontend\.tgz',
+              frontend_package,
+              content,
+          )
+          content = re.sub(
+              r'https://github\.com/[^"]+/releases/download/build-[^/]+/backstage-finops-backend\.tgz',
+              backend_package,
+              content,
+          )
+
+          frontend_block = re.compile(
+              r'(- package: "https://github\.com/[^"]+/backstage-finops-frontend\.tgz"\n\s+disabled: false\n\s+integrity: )"sha256-[^"]+"',
+              re.MULTILINE,
+          )
+          backend_block = re.compile(
+              r'(- package: "https://github\.com/[^"]+/backstage-finops-backend\.tgz"\n\s+disabled: false\n\s+integrity: )"sha256-[^"]+"',
+              re.MULTILINE,
+          )
+
+          content, frontend_count = frontend_block.subn(rf'\1"{frontend_sri}"', content, count=1)
+          content, backend_count = backend_block.subn(rf'\1"{backend_sri}"', content, count=1)
+
+          if frontend_count != 1 or backend_count != 1:
+              print(
+                  "Expected one frontend and one backend dynamic plugin block update "
+                  f"(got frontend={frontend_count}, backend={backend_count}).",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          path.write_text(content)
+          PY
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/bump-dynamic-plugins-${{ github.event.release.tag_name }}
+          title: "chore: bump dynamic plugin URLs and integrity for ${{ github.event.release.tag_name }}"
+          commit-message: "chore: update finops dynamic plugin package URLs and integrity"
+          body: |
+            ## Summary
+            - Update FinOps frontend/backend package URLs to `${{ github.event.release.tag_name }}`
+            - Update `integrity` values from freshly published artifacts
+
+            ## Test plan
+            - [ ] Verify `test-extras.yml` points to the new release tag
+            - [ ] Verify integrity values are `sha256-<base64>` SRI format

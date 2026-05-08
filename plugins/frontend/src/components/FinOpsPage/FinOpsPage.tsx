@@ -25,7 +25,7 @@ export const FinOpsLandingPage = () => {
         <section style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
           <article style={cardStyle}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>FinOps CRA</h3>
-            <p style={{ margin: 0 }}>Cloud resources allocation dashboard and trends.</p>
+            <p style={{ margin: 0 }}>Cloud resources attribution dashboard and trends.</p>
             <a href="/finops/cra" style={linkStyle}>
               Open FinOps CRA
             </a>

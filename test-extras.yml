@@ -1,0 +1,1708 @@
+---
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: backstage-test-extras
+labels:
+  template: backstage-test-extras
+parameters:
+  - name: DATABASE_SECRET_NAME
+    displayName: Name of the secret with DB configuration
+    value: "backstage-db"
+
+  - name: S3_SECRET_NAME
+    displayName: Name of the secret with S3 configuration
+    value: "inscope-s3-creds"
+
+  - name: ELASTICACHE_SECRET_NAME
+    displayName: Name of the secret with Elasticache configuration
+    value: "backstage-elasticache-db"
+
+  - name: KEYCLOAK_ADMIN_USER
+    displayName: Name of the secret with Keycloak admin user
+    value: "keycloak-admin"
+
+  - name: KEYCLOAK_ADMIN_PASSWORD
+    displayName: Name of the secret with Keycloak admin password
+    value: "testtesttest"
+
+  - name: KEYCLOAK_CLIENT_ID
+    displayName: Name of the secret with Keycloak client ID
+    value: "backstage"
+
+  - name: KEYCLOAK_CLIENT_SECRET
+    displayName: Name of the secret with Keycloak client secret
+    value: "testtesttest"
+
+objects:
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: ${S3_SECRET_NAME}
+    stringData:
+      minio_root_user: testtesttest
+      minio_root_password: testtesttest
+      aws_access_key_id: testtesttest
+      aws_region: none
+      aws_secret_access_key: testtesttest
+      bucket: backstage
+      endpoint: backstage-minio:9000
+      region: none
+
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: ${DATABASE_SECRET_NAME}
+    stringData:
+      db.host: backstage-db
+      db.port: "5432"
+      db.name: backstage
+      db.user: backstage
+      db.password: testtesttest
+      db.adminPassword: adminadminadmin
+      db.ca_cert: ""
+  # minio deployment
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      labels:
+        app: backstage-minio
+      name: backstage-minio
+    spec:
+      selector:
+        matchLabels:
+          app: backstage-minio
+      template:
+        metadata:
+          labels:
+            app: backstage-minio
+        spec:
+          containers:
+            - args:
+                - server
+                - /storage
+              env:
+                - name: MINIO_ROOT_USER
+                  valueFrom:
+                    secretKeyRef:
+                      key: minio_root_user
+                      name: ${S3_SECRET_NAME}
+                - name: MINIO_ROOT_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: minio_root_password
+                      name: ${S3_SECRET_NAME}
+              image: quay.io/app-sre/minio:RELEASE.2025-01-20T14-49-07Z
+              imagePullPolicy: IfNotPresent
+              livenessProbe:
+                failureThreshold: 3
+                initialDelaySeconds: 10
+                periodSeconds: 10
+                successThreshold: 1
+                tcpSocket:
+                  port: 9000
+                timeoutSeconds: 2
+              name: backstage-minio
+              ports:
+                - containerPort: 9000
+                  name: minio
+                  protocol: TCP
+              readinessProbe:
+                failureThreshold: 3
+                initialDelaySeconds: 20
+                periodSeconds: 10
+                successThreshold: 1
+                tcpSocket:
+                  port: 9000
+                timeoutSeconds: 2
+              resources: {}
+              volumeMounts:
+                - mountPath: /storage
+                  name: backstage-minio-storage
+          volumes:
+            - emptyDir: {}
+              name: backstage-minio-storage
+
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: backstage-minio
+      labels:
+        app: backstage-minio
+    spec:
+      selector:
+        app: backstage-minio
+      ports:
+        - name: minio
+          port: 9000
+          targetPort: 9000
+          protocol: TCP
+  # backstage-db deployment
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      app: backstage-db
+      name: backstage-db
+    spec:
+      selector:
+        matchLabels:
+          app: backstage-db
+      template:
+        metadata:
+          labels:
+            app: backstage-db
+        spec:
+          containers:
+            - env:
+                - name: POSTGRESQL_USER
+                  valueFrom:
+                    secretKeyRef:
+                      key: db.user
+                      name: ${DATABASE_SECRET_NAME}
+                - name: POSTGRESQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: db.password
+                      name: ${DATABASE_SECRET_NAME}
+                - name: POSTGRESQL_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: db.adminPassword
+                      name: ${DATABASE_SECRET_NAME}
+                - name: POSTGRESQL_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      key: db.name
+                      name: ${DATABASE_SECRET_NAME}
+              image: quay.io/cloudservices/postgresql-rds:16-288a035
+              imagePullPolicy: IfNotPresent
+              livenessProbe:
+                exec:
+                  command:
+                    - psql
+                    - -U
+                    - $(POSTGRESQL_USER)
+                    - -d
+                    - $(POSTGRESQL_DATABASE)
+                    - -c
+                    - SELECT 1
+                failureThreshold: 3
+                initialDelaySeconds: 15
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 2
+              name: backstage-no-op-db
+              ports:
+                - containerPort: 5432
+                  name: database
+                  protocol: TCP
+              readinessProbe:
+                exec:
+                  command:
+                    - psql
+                    - -U
+                    - $(POSTGRESQL_USER)
+                    - -d
+                    - $(POSTGRESQL_DATABASE)
+                    - -c
+                    - SELECT 1
+                failureThreshold: 3
+                initialDelaySeconds: 45
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 2
+              resources:
+                limits:
+                  cpu: 600m
+                  memory: 1Gi
+                requests:
+                  cpu: 300m
+                  memory: 512Mi
+              volumeMounts:
+                - mountPath: /var/lib/pgsql/data
+                  name: backstage-no-op-db
+          volumes:
+            - emptyDir: {}
+              name: backstage-no-op-db
+
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: backstage-db
+      labels:
+        app: backstage-db
+    spec:
+      selector:
+        app: backstage-db
+      ports:
+        - name: database
+          port: 5432
+          protocol: TCP
+          targetPort: 5432
+
+  # valkey deployment
+  - kind: Deployment
+    apiVersion: apps/v1
+    metadata:
+      name: valkey-deployment
+      labels:
+        app: valkey
+    spec:
+      replicas: 1 # Adjust replica count as needed
+      selector:
+        matchLabels:
+          app: valkey
+      template:
+        metadata:
+          labels:
+            app: valkey
+        spec:
+          containers:
+            - name: valkey
+              image: registry.redhat.io/rhel10/valkey-8:10.0-1758500270 # Use the desired Valkey image tag
+              ports:
+                - containerPort: 6379
+              volumeMounts:
+                - name: valkey-data
+                  mountPath: /data # Default data directory for Valkey
+          volumes:
+            - name: valkey-data
+              persistentVolumeClaim:
+                claimName: valkey-pvc
+
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: valkey-pvc
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi # Adjust storage size as needed
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: valkey-service
+    spec:
+      selector:
+        app: valkey
+      ports:
+        - protocol: TCP
+          port: 6379
+          targetPort: 6379
+      type: ClusterIP # Or NodePort/LoadBalancer for external access
+
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: ${ELASTICACHE_SECRET_NAME}
+    stringData:
+      db.auth_token: testtesttest
+      db.endpoint: valkey-service
+      db.port: "6379"
+
+  # app-config deployment
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: backstage-app-config
+    data:
+      app-config.yaml: |
+        dangerouslyAllowSignInWithoutUserInCatalog: true
+        quay:
+          uiUrl: 'https://quay.io'
+        app:
+          title: inScope
+          baseUrl: http://localhost:7007
+          firelink:
+            firelinkUrl: ${FIRELINK_APP_URL}
+            ephemeralUrl: ${FIRELINK_EPHEMERAL_CONSOLE_URL}
+          support:
+            url: https://redhat.enterprise.slack.com/archives/C05P11UAY3S
+            items:
+              - title: inScope Developer Portal
+                links:
+                - url: https://redhat.enterprise.slack.com/archives/C05P11UAY3S
+                  title: inScope Developer Portal Slack
+        acs:
+          acsUrl: ${ACS_API_URL}
+
+        grafana:
+          dashboardUrl: "https://grafana.app-sre.devshift.net/d/feq1jm3omydq8c/hcm-cicd-test-logs"
+        auth:
+          providers:
+            guest: {}
+            github:
+              development:
+                $include: /app/github/github-app-backstage-showcase-credentials.yaml
+          environment: development
+          allowGuestAccess: true
+
+        backend:
+          reading:
+            allow:
+              - host: '*.redhat.com'
+              - host: 'catalog-data:8080'
+              - host: 'api.openshift.com'
+
+          #TODO: we need to make this secret more secret
+          auth:
+            dangerouslyDisableDefaultAuthPolicy: true
+            keys:
+              - secret: RCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
+          listen: 0.0.0.0:7007
+          baseUrl: http://localhost:7007
+          csp:
+            # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
+            # Default Helmet Content-Security-Policy values can be removed by setting the key to false
+            connect-src:
+              - "'self'"
+              - 'http:'
+              - 'https:'
+            # Plugin: Jira
+            img-src:
+              # "'self'" and 'data' are from the backstage default but must be set since img-src is overwritten
+              - "'self'"
+              - 'data:'
+              # Allow your Jira instance for @roadiehq/backstage-plugin-jira
+              # - ${JIRA_URL}
+          cors:
+            origin: '*'
+
+          database:
+            client: pg
+            connection:
+              host: ${POSTGRES_HOST}
+              port: ${POSTGRES_PORT}
+              user: ${POSTGRES_USER}
+              password: ${POSTGRES_PASSWORD}
+          cache:
+            store: redis
+            connection: redis://${CACHE_TOKEN}@${CACHE_HOST}:${CACHE_PORT}
+            useRedisSets: true
+        permission:
+          enabled: false
+        catalog:
+          rules:
+            - allow: [Component, API, Location, System, Group, User, Domain]
+          locations:
+            - type: file
+              target: /opt/app-root/src/catalog-entities/all.yaml
+              rules:
+                - allow: [Component, API, Location, System, Group, User, Domain]
+            - type: file
+              target: /opt/app-root/src/inscope-catalog-entries/catalog-entities.yaml
+              rules:
+                - allow: [Component, API, Location, System, Group, User, Domain, Template]
+            - type: file
+              target: /opt/app-root/src/inscope-catalog-entries/catalog-templates.yaml
+              rules:
+                - allow: [Component, API, Location, System, Group, User, Domain, Template]
+        organization:
+          name: Red Hat
+
+        integrations:
+          # Plugin: GitHub
+          github:
+            - host: github.com
+              # This is a GitHub App. You can find out how to generate this file, and more information
+              # about setting up the GitHub integration here: https://backstage.io/docs/integrations/github/github-apps
+              apps:
+                - $include: /app/github/github-app-backstage-showcase-credentials.yaml
+                # - appId: ${GITHUB_APP_APP_ID}
+                #   webhookUrl: ${GITHUB_APP_WEBHOOK_URL}
+                #   clientId: ${GITHUB_APP_CLIENT_ID}
+                #   clientSecret: ${GITHUB_APP_CLIENT_SECRET}
+                #   webhookSecret: ${GITHUB_APP_WEBHOOK_SECRET}
+                #   privateKey: |
+                #     ${GITHUB_APP_PRIVATE_KEY}
+
+          # Plugin: GitLab
+          gitlab:
+            - host: ${GITLAB_HOST}
+              token: ${GITLAB_TOKEN}
+              apiBaseUrl: ${GITLAB_API_BASE_URL}
+              baseUrl: ${GITLAB_BASE_URL}
+        proxy:
+          endpoints:
+            '/ephemeral':
+              target: "${FIRELINK_EPHEMERAL_API_URL}"
+              headers:
+                Authorization: "Bearer ${FIRELINK_EPHEMERAL_API_TOKEN}"
+              changeOrigin: true
+            '/developer-hub':
+              target: 'http://inscope-resources'
+              pathRewrite:
+                '^/api/proxy/developer-hub': '/resources/json/homepage.json'
+              changeOrigin: true
+            '/inscope-resources':
+              target: 'http://inscope-resources'
+              changeOrigin: true
+              # Inscope resources doesn't serve out over SSL
+              secure: false
+            '/inscope-resources/resources/images':
+              target: "http://resources:8000/api/proxy/inscope-resources/resources/images"
+              changeOrigin: true
+              secure: false
+              # This needs to unauthed because images are loaded via img tags
+              # and thus don't include auth cookies
+              # These are static content and represent no risk
+              credentials: dangerously-allow-unauthenticated
+            '/status':
+              target: 'https://status.redhat.com/api/v2/summary.json'
+              changeOrigin: true
+            '/finops':
+              target: 'http://localhost:7007/api/finops'
+              credentials: dangerously-allow-unauthenticated
+              changeOrigin: true
+            '/snyk':
+              target: 'https://api.snyk.io/'
+              headers:
+                User-Agent: 'tech-services/backstage-plugin/1.0'
+                Authorization: 'token ${SNYK_AUTH_TOKEN}'
+            '/web-rca':
+              target: 'https://api.stage.openshift.com/api/web-rca/v1'
+              allowedHeaders: ['Authorization']
+              # This is ok to allow since this route isn't pre-authenticated
+              # web rca backend plugin gets an oauth token from SSO before talking to this endpoint
+              credentials: dangerously-allow-unauthenticated
+            '/status-board':
+              target: 'https://api.stage.openshift.com/api/status-board/v1'
+              allowedHeaders: ['Authorization']
+              # I am not sure what uses this so not changing it for now
+              credentials: dangerously-allow-unauthenticated
+            '/sso-redhat':
+              target: 'https://sso.redhat.com'
+              allowedHeaders: ['Content-Type']
+              # This is ok because this is not a pre-authenticated route
+              # It is called by web rca backend plugin, not the frontend
+              credentials: dangerously-allow-unauthenticated
+          #Plugin Proxy: Visual Qontract
+            '/visual-qontract': 
+              target: 'http://qontract-server:4000'
+            '/prometheus':
+              target: "https://prometheus.crcs02ue1.devshift.net/api/v1/"
+              allowedMethods: ['POST', 'GET']
+              headers:
+                Authorization: "Bearer ${STAGE_PROMETHEUS_TOKEN}"
+        #   #Plugin Proxy: Openshift Deployment Info
+            '/openshift-deployments': 
+              target: 'http://qontract-server:4000'
+            '/stage':
+              target: 'https://api.crcs02ue1.urby.p1.openshiftapps.com:6443'
+              headers:
+                Authorization: "Bearer ${STAGE_CLUSTER_API_TOKEN}"
+            '/prod':
+              target: 'https://api.crcp01ue1.o9m8.p1.openshiftapps.com:6443'
+              headers:
+                Authorization: "Bearer ${PROD_CLUSTER_API_TOKEN}"
+        #   #AI Search Frontend
+        #     # '/tangerine':
+        #     #   target: ${TANGERINE_CLUSTER_URL}
+        #     #   headers:
+        #     #     Authorization: Bearer ${TANGERINE_SA}
+        #     #   allowedMethods: ['POST', 'GET']
+        #     #Plugin: Quay
+            '/quay/api':
+              target: https://quay.io/
+              headers:
+                X-Requested-With: 'XMLHttpRequest'
+                # Uncomment the following line to access a private Quay Repository using a token
+                Authorization: 'Bearer ${QUAY_API_TOKEN}'
+              changeOrigin: true
+              secure: true
+        #     #Plugin: Ibutsu
+        #     # '/ibutsu':
+        #     #   target: https://ibutsu-api.insights.corp.redhat.com
+        #     #   headers:
+        #     #     Authorization: "Bearer ${IBUTSU_API_TOKEN}"
+
+            #Plugin: Security (Grype)
+            '/qontract': 
+              target: 'qontract-server:4000'
+              credentials: dangerously-allow-unauthenticated
+            '/actions':
+              target: "https://api.github.com"
+              headers:
+                Authorization: "Bearer ${GITHUB_ACTIONS_PAT}"
+              credentials: dangerously-allow-unauthenticated
+              allowedHeaders:
+                - Location
+                - Authorization
+                - X-GitHub-Api-Version
+                - Accept
+
+        #     #Plugin: ACS
+            '/acs':
+              credentials: dangerously-allow-unauthenticated
+              target: ${ACS_API_URL}
+              headers:
+                authorization: "Bearer ${ACS_API_KEY}"
+
+        #     #Plugin merge queue
+        #     '/mergeq':
+        #         target: 'https://gitlab.cee.redhat.com/service/app-interface-output/-/raw/master/'
+        #         changeOrigin: true
+
+        #     #Plugin: Kafka-Info
+            '/kafka-lag':
+              target: 'https://prometheus.crcs02ue1.devshift.net/api/v1'
+              allowedHeaders: ['Authorization']
+              headers:
+                Authorization: "Bearer ${STAGE_PROMETHEUS_TOKEN}"
+
+        #     #Plugin: Metrics and Monitoring
+            '/prometheus/stage':
+              target: https://prometheus.crcs02ue1.devshift.net/api/v1/
+              secure: true
+              credentials: dangerously-allow-unauthenticated
+              headers:
+                Authorization: "Bearer ${STAGE_PROMETHEUS_TOKEN}"
+            '/prometheus/prod':
+              target: https://prometheus.crcp01ue1.devshift.net/api/v1/
+              secure: true
+              credentials: dangerously-allow-unauthenticated
+              headers:
+                Authorization: "Bearer ${PROD_PROMETHEUS_TOKEN}"
+
+        #     #Plugin: CPT
+        #     '/cpt':
+        #       target: 'http://elasticsearch.intlab.perf-infra.lab.eng.rdu2.redhat.com/results-dashboard-data/_doc/_search'
+
+                
+        #     #Other Proxies
+
+
+        #     # Plugin: SonarQube
+        #     '/sonarqube':
+        #       # if not using sonarqube, assign SONARQUBE_URL to https://sonarcloud.io
+        #       # target: https://sonarcloud.io/api
+        #       target: ${SONARQUBE_URL}/api
+        #       allowedMethods: ['GET']
+        #       auth: ${SONARQUBE_TOKEN}
+
+        #     # Plugin: Jenkins
+        #     '/jenkins/api':
+        #       target: ${JENKINS_URL}
+        #       headers:
+        #         Authorization: ${JENKINS_TOKEN}
+
+        #     # Plugin: Jira
+            '/jira/api':
+              target: 'https://issues.redhat.com'
+              headers:
+                Authorization: ${JIRA_API_TOKEN}
+                Accept: 'application/json'
+                Content-Type: 'application/json'
+                X-Atlassian-Token: 'no-check'
+                User-Agent: ${JIRA_USER_AGENT}
+
+        #     # Plugin: Jfrog Artifactory
+        #     '/jfrog-artifactory/api':
+        #       target: ${ARTIFACTORY_URL}
+        #       headers:
+        #         Authorization: Bearer ${ARTIFACTORY_TOKEN}
+        #       # Change to "false" in case of using self hosted artifactory instance with a self-signed certificate
+        #       secure: ${ARTIFACTORY_SECURE}
+
+        #     # Plugin: PagerDuty
+        #     '/pagerduty':
+        #       target: https://api.pagerduty.com
+        #       headers:
+        #         Authorization: Token token=${PAGERDUTY_TOKEN}
+
+        #     # Plugin: Dynatrace
+        #     '/dynatrace':
+        #       target: ${DYNATRACE_API_URL}
+        #       headers:
+        #         # This API access token requires entities.read and problems.read permissions
+        #         # For more info on how to generate this token: https://www.dynatrace.com/support/help/dynatrace-api/basics/dynatrace-api-authentication
+        #         Authorization: 'Api-Token ${DYNATRACE_ACCESS_TOKEN}'
+
+        #     # Plugin: Nexus Repository Manager
+        #     '/nexus-repository-manager':
+        #       target: ${NEXUS_REPOSITORY_MANAGER_URL}
+        #       headers:
+        #         X-Requested-With: 'XMLHttpRequest'
+        #         # Uncomment the following line to access a private Nexus Repository Manager using a token
+        #         # Authorization: 'Bearer <NEXUS_REPOSITORY_MANAGER_TOKEN>'
+        #       changeOrigin: true
+        #       # Change to "false" in case of using self hosted Nexus Repository Manager instance with a self-signed certificate
+        #       secure: ${NEXUS_REPOSITORY_MANAGER_SECURE}
+
+        # # Reference documentation http://backstage.io/docs/features/techdocs/configuration
+        # # Note: After experimenting with basic setup, use CI/CD to generate docs
+        # # and an external cloud storage when deploying TechDocs for production use-case.
+        # # https://backstage.io/docs/features/techdocs/how-to-guides#how-to-migrate-from-techdocs-basic-to-recommended-deployment-approach
+
+
+        progressiveDelivery:
+          saasPromotionsJson: /var/opt/progressive-delivery/saas-promotions.json
+
+        ocm:
+          webRcaUIUrl: https://web-rca.stage.devshift.net
+          clientId: ${WEB_RCA_CLIENT_ID}
+          clientSecret: ${WEB_RCA_CLIENT_SECRET}
+
+        statusService:
+          statusPageUrl: ${STATUSPAGE_URL}
+          statusPageAuthToken: ${STATUSPAGE_AUTH}
+
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: saas-promotions
+    data:
+      saas-promotions.json: |
+        {
+          "nodes": ["{\"app\": \"acs-fleet-manager\", \"cluster\": \"app-sre-stage-01\", \"commit_sha\": \"f6fd56ce5aee5bbce11c56c51a999c96a6049cef\", \"deployment_state\": \"success\", \"isTest\": false, \"namespace\": \"acs-fleet-manager-stage\", \"resourceTemplate\": \"acs-fleet-manager\", \"saas\": \"acs-fleet-manager\", \"target\": \"acs-fleet-manager-stage\"}", "{\"app\": \"rhsm-api-proxy\", \"cluster\": \"appsres09ue1\", \"commit_sha\": \"e7c5a458cadee29bdc051e26948e500bf61f8da9\", \"deployment_state\": \"success\", \"isTest\": false, \"namespace\": \"rhsm-api-proxy-test\", \"resourceTemplate\": \"act-keys-ui-pytest\", \"saas\": \"act-keys-ui-pytest\", \"target\": null}"]
+        }
+
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: change-log
+    data:
+      change-log.json: |
+        {"items": [{"apps": ["app-sre-observability"], "change_types": ["resource-updates", "namespace-openshift-resources-updates"], "commit": "207e37c0857679269ed70f8c9384cfddf44abd88", "description": "Add alert for osd privatelink needs scaling out of VPCs due to reaching subnets ipv4 capacity (!160946)", "error": false, "merged_at": "2025-10-14T17:44:31.000+00:00"}, {"apps": ["kessel"], "change_types": ["saas-file-parameters", "saas-file-promotion"], "commit": "91e7f0766ec722649f1986991ff49c695aef8b74", "description": "Deploy inventory pod for db operations (!161194)", "error": false, "merged_at": "2025-10-14T17:34:49.000+00:00"}]}
+
+  # backstage-env-vars deployment
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: backstage-env-vars
+      annotations:
+        qontract.recycle: "true"
+    stringData:
+      TECHDOCS_S3_BUCKET: "backstage-stage"
+      TECHDOCS_S3_ENDPOINT: "https://backstage-minio:9000"
+      TECHDOCS_S3_REGION: "none"
+      TECHDOCS_S3_ACCESS_KEY: "testtesttest"
+      TECHDOCS_S3_SECRET: "testtesttest"
+
+      POSTGRES_HOST: "backstage-db"
+      POSTGRES_DB: "backstage"
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: "backstage"
+      POSTGRES_PASSWORD: "testtesttest"
+
+      CACHE_PORT: "6379"
+      CACHE_HOST: "valkey-service"
+      CACHE_TOKEN: "testtesttest"
+
+      FIRELINK_APP_URL: "https://firelink.devshift.net"
+      FIRELINK_EPHEMERAL_CONSOLE_URL: "https://console-openshift-console.apps.crc-eph.r9lp.p1.openshiftapps.com"
+      FIRELINK_EPHEMERAL_API_URL: "https://api.crc-eph.r9lp.p1.openshiftapps.com:6443"
+
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: finops-snowflake-env
+      annotations:
+        qontract.recycle: "true"
+    stringData:
+      SNOWFLAKE_ACCOUNT: "GDADCLC-RHSANDBOX"
+      SNOWFLAKE_USER: "dataverse_webapphcmfinops_sandbox_appuser"
+      SNOWFLAKE_WAREHOUSE: "DEFAULT"
+      SNOWFLAKE_DATABASE: "HCMFINOPSSOURCE_DB"
+      SNOWFLAKE_SCHEMA: "MARTS"
+      SNOWFLAKE_ROLE: "DATAVERSE_WEBAPPHCMFINOPS_ROLE"
+  # dynamic-plugins deployment
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: dynamic-plugins
+      annotations:
+        qontract.recycle: "true"
+    data:
+      dynamic-plugins.yaml: |
+        includes:
+        - dynamic-plugins.default.yaml
+        plugins:
+        - package: "https://github.com/RedHatInsights/snyk-plugin-dev/releases/download/2.4.1/backstage-plugin-snyk-dynamic-2.4.1.tgz"
+          integrity: "sha256-iIhF6VPhYebKTaeEPbitiMOHzx1nq9PNPD142NrnRt8="
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                backstage-plugin-snyk:
+                  entityTabs:
+                    - path: /snyk
+                      title: Snyk
+                      mountPoint: entity.page.snyk
+                  mountPoints:
+                    - mountPoint: entity.page.snyk/cards
+                      importName: EntitySnykContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 12"
+                            md: "span 12"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isType: service
+                            - isSnykAvailable
+                    - mountPoint: entity.page.overview/cards
+                      importName: SnykOverview
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 4"
+                            xs: "span 4"
+                        if:
+                          allOf:
+                            - isType: service
+                            - isSnykAvailable
+        - package: "https://github.com/RedHatInsights/backstage-plugin-visual-qontract/releases/download/v1.6.8/redhatinsights-backstage-plugin-webrca-backend-dynamic-1.2.2.tgz"
+          integrity: "sha256-XhhmHuc6TIAwZCba+T4aY00epwnwQvjO1M35RWfcS/4="
+          disabled: false
+        - package: "https://github.com/RedHatInsights/backstage-plugin-visual-qontract/releases/download/v1.6.8/redhatinsights-backstage-plugin-webrca-frontend-dynamic-1.2.2.tgz"
+          integrity: "sha256-4KbTCHk3s9rCsdySz6imCp9BlJkt890nEIF+1KHFoxY="
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-webrca-frontend:
+                  entityTabs:
+                    - path: /incidents
+                      title: Incidents
+                      mountPoint: entity.page.incidents
+                  mountPoints:
+                    - mountPoint: 'entity.page.incidents/cards'
+                      importName: WebRcaPage
+                      config:
+                        layout:
+                          gridColumn: "1 / span 12"
+                        if:
+                          allOf:
+                            - isKind: component
+                            - isType: service
+        - package: "https://github.com/RedHatInsights/backstage-plugin-status-page/releases/download/v1.14.0/appdev-backstage-plugin-outages-dynamic-1.14.0.tgz"
+          integrity: "sha256-8Xn0/vw53VRj2ZuyRdO0s0m8CQdUSBVDMoo766rs7co="
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-status-page:
+                  dynamicRoutes:
+                    - path: /status-page
+                      importName: StatusPageComponent 
+                      menuItem:
+                        icon: 'kind:resource'
+                        text: Status Page
+                    - path: /status-page/create-incident
+                      importName: CreateIncident
+                    - path: /status-page/incident/:incident_id
+                      importName: UpdateIncident 
+        - package: "https://github.com/RedHatInsights/backstage-plugin-status-page/releases/download/v1.14.0/compass-backstage-plugin-redirects-dynamic-1.3.0.tgz"
+          integrity: "sha256-NLcqh7SCVcAGzYyeQAhMGOVq3mOfRSSZW4JO7ud2VWA="
+          disabled: false
+        - package: "https://github.com/RedHatInsights/backstage-plugin-status-page/releases/download/v1.14.0/appdev-backstage-plugin-outage-template-backend-dynamic-1.2.1.tgz"
+          integrity: "sha256-MXvPUoj3aVzNdISsyagphxbDijqDi5v99JiZdUXC2aM="
+          disabled: false
+        - package: "https://github.com/RedHatInsights/backstage-plugin-firelink/releases/download/v1.0.5/redhatinsights-backstage-plugin-firelink-dynamic-1.0.5.tgz"
+          disabled: false
+          integrity: "sha256-2VKSv3HYDswWJQMrv3dooH78D4oAigACWhnnuLSjIis="
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-firelink:
+                  dynamicRoutes:
+                    - path: /firelink
+                      importName: FirelinkPage
+                      menuItem:
+                        icon: 'kind:resource'
+                        text: Firelink
+        - package: "https://github.com/theute/finops-backstage/releases/download/build-12/backstage-finops-frontend.tgz"
+          disabled: false
+          integrity: "sha256-OJoh68YRWGF4ITAkbPKyirglRcgrh0Ntps9G4+xG7Ts="
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                internal.backstage-plugin-finops:
+                  dynamicRoutes:
+                    - path: /finops
+                      importName: FinOpsPage
+                      menuItem:
+                        icon: 'kind:resource'
+                        text: FinOps
+                    - path: /finops-cra
+                      importName: FinOpsCRAPage
+                    - path: /finops/cra
+                      importName: FinOpsCRAPage
+        - package: "https://github.com/theute/finops-backstage/releases/download/build-12/backstage-finops-backend.tgz"
+          disabled: false
+          integrity: "sha256-gwZPhgSC+EGI1gpYGbV5vPnCGDC/uVS3ytndVykPBlU="
+          pluginConfig:
+            finops:
+              snowflake:
+                account: ${SNOWFLAKE_ACCOUNT}
+                user: ${SNOWFLAKE_USER}
+                privateKeyPath: ${SNOWFLAKE_PRIVATE_KEY_PATH}
+                # privateKeyPassphrase: ${SNOWFLAKE_PRIVATE_KEY_PASSPHRASE}
+                warehouse: ${SNOWFLAKE_WAREHOUSE}
+                database: ${SNOWFLAKE_DATABASE}
+                schema: ${SNOWFLAKE_SCHEMA}
+                role: ${SNOWFLAKE_ROLE}
+                queryTag: finops-backend
+                poolMaxSize: 8
+                table: cra_scope_costs
+                dimTeamTable: cra_team_directory
+                bridgeTeamScopeTable: cra_team_attributed_scopes
+
+        - package: "https://github.com/RedHatInsights/backstage-plugin-visual-qontract/releases/download/v1.6.8/redhatinsights-backstage-plugin-visual-qontract-dynamic-1.6.8.tgz"
+          disabled: false
+          integrity: "sha256-EyI3u+ic6pABjD3fclMyuH4Bo/xl/FFrBrPjUzVXO5E="
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-visual-qontract:
+                  dynamicRoutes:
+                    - path: /
+                      importName: EntityQontractHomePageComponent
+                    - path: /news
+                      importName: EntityQontractNewsComponent
+                      menuItem:
+                        icon: techdocs
+                        text: News
+                    - path: /incident-management
+                      importName: IncidentResponseComponent
+                      menuItem:
+                        icon: 'warning'
+                        text: "Incidents"
+                    - path: /app-interface
+                      importName: ChangelogPageComponent
+                      menuItem:
+                        icon: 'kind:system'
+                        text: "App Interface"
+                  mountPoints:
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityQontractNamespacesContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isType: application
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityQontractPipelinesComponent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isType: application
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityQontractCodeComponentsContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isType: application
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityQontractEscalationPolicyComponent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isType: application
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityQontractDependenciesContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isType: application
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityQontractSLOComponent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 6"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isType: application
+
+        - package: "https://github.com/RedHatInsights/backstage-plugin-ibutsu/releases/download/v0.1.3/redhatinsights-backstage-plugin-ibutsu-dynamic-0.1.3.tgz"
+          integrity: "sha256-EfAJ76u9VizqxRrp7EjopXnCfXjc3n+UMAwRvnr6G5s="
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-ibutsu:
+                  entityTabs:
+                    - path: /ibutsu
+                      title: Ibutsu
+                      mountPoint: entity.page.ibutsu
+                  mountPoints:
+                    - mountPoint: 'entity.page.ibutsu/cards'
+                      importName: EntityIbutsuContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 12"
+                            md: "span 12"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isType: application
+
+        - package: "https://github.com/RedHatInsights/backstage-plugin-cpt/releases/download/v0.1.3/redhatinsights-backstage-plugin-cpt-dynamic-0.1.3.tgz"
+          integrity: "sha256-JvOb/EcEju+Bn/PonMQMfcWLEY2D5YAwptIeTFiTShU="
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-cpt:
+                  entityTabs:
+                    - path: /cpt
+                      title: CPT
+                      mountPoint: entity.page.cpt
+                  mountPoints:
+                    - mountPoint: 'entity.page.cpt/cards'
+                      importName: EntityCPTContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 12"
+                            md: "span 12"
+                            xs: "span 14"
+                        if:
+                          allOf:
+                            - isType: application
+
+        - package: "https://github.com/RedHatInsights/backstage-plugin-openshift/releases/download/v0.1.7/redhatinsights-backstage-plugin-openshift-dynamic-0.1.7.tgz"
+          integrity: "sha256-JkcYNsHeARBwKRyA8ej0JYBhsxVo1fwlitGChO+tf2o="
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-openshift:
+                  entityTabs:
+                    - path: /openshift-deployments
+                      title: OpenShift
+                      mountPoint: entity.page.openshift-deployments
+                  mountPoints:
+                    - mountPoint: entity.page.openshift-deployments/cards
+                      importName: EntityOpenshiftInfoContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 12"
+                            md: "span 12"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isKind: component
+                            - isType: service
+
+        - package: "https://github.com/RedHatInsights/backstage-plugin-ai-search-frontend/releases/download/v1.2.0/redhatinsights-backstage-plugin-convo-frontend-dynamic-1.2.0.tgz"
+          disabled: false
+          integrity: "sha256-LDOCQk8qy98LnRbQsOLz5/GI6819Qq85UjzgB8+Ltrs="
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-convo-frontend:
+                  dynamicRoutes:
+                    - path: /convo
+                      importName: ConvoFrontendPage
+                      menuItem:
+                        icon: 'chat'
+                        text: "Convo: AI Search"
+
+        - package: "https://github.com/RedHatInsights/backstage-plugin-security/releases/download/v0.1.4/redhatinsights-backstage-plugin-security-backend-dynamic-0.1.4.tgz"
+          integrity: sha256-prh0qWLTgaMwEvkkKPCCRI00jtP4VF/p2cIW4r+FSw0=
+          disabled: false
+        - package: "https://github.com/RedHatInsights/backstage-plugin-security/releases/download/v0.1.4/redhatinsights-backstage-plugin-security-frontend-dynamic-0.1.4.tgz"
+          integrity: sha256-6xNptli6om/4qM0qaVeBH3o4HL3erqgvy02CNlOTaB4=
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-security-frontend:
+                  entityTabs:
+                    - path: /security-frontend
+                      title: Security
+                      mountPoint: entity.page.security
+                  mountPoints:
+                    - mountPoint: entity.page.security/cards
+                      importName: EntitySecurityFrontendContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 12"
+                            md: "span 12"
+                            xs: "span 12"
+
+        - package:  "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-acs:pr_986__0.0.2!backstage-community-plugin-acs"
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                backstage-community.plugin-acs:
+                  entityTabs:
+                    - path: /acs
+                      title: RHACS
+                      mountPoint: entity.page.acs
+                  mountPoints:
+                    - mountPoint: entity.page.acs/cards
+                      importName: EntityACSContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 12"
+                            md: "span 12"
+                            xs: "span 12"
+
+        - package: "https://github.com/RedHatInsights/backstage-plugin-progressive-delivery/releases/download/v0.5.1/redhatinsights-backstage-plugin-progressive-delivery-frontend-dynamic-0.5.1.tgz"
+          integrity: sha256-HLEZZch5AhmaR5WAlMOzxIYhePmdJyDUnGF0d0cfXyE=
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-progressive-delivery-frontend:
+                  entityTabs:
+                    - path: /rollout
+                      title: Rollout
+                      mountPoint: entity.page.rollout
+                  mountPoints:
+                    - mountPoint: 'entity.page.rollout/cards'
+                      importName: EntityProgressiveDeliveryContent
+                      config:
+                        layout:
+                          gridColumn: "1 / span 12"
+                        if:
+                          allOf:
+                            - isKind: component
+                            - isType: service
+
+        - package: ./dynamic-plugins/dist/roadiehq-backstage-plugin-jira
+          disabled: true
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                roadiehq.backstage-plugin-jira:
+                  mountPoints:
+                    - mountPoint: entity.page.issues/cards
+                      importName: EntityJiraOverviewCard
+                      config:
+                        layout:
+                          gridColumn: "1 / -1"
+                        if:
+                          allOf:
+                            - isJiraAvailable
+
+        - package: ./dynamic-plugins/dist/backstage-community-plugin-github-actions
+          disabled: true
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                backstage-community.plugin-github-actions:
+                  mountPoints:
+                    - mountPoint: entity.page.ci/cards
+                      importName: EntityGithubActionsContent
+                      config:
+                        layout:
+                          gridColumn: "1 / -1"
+                        if:
+                          allOf:
+                            - isGithubActionsAvailable
+
+        - package:  ./dynamic-plugins/dist/backstage-community-plugin-github-issues
+          disabled: true
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                backstage-community.plugin-github-issues:
+                  mountPoints:
+                    - mountPoint: entity.page.issues/cards
+                      importName: GithubIssuesCard
+                      config:
+                        layout:
+                          gridColumn: "1 / -1"
+                        if:
+                          allOf:
+                            - hasAnnotation: github.com/project-slug
+
+        - package: ./dynamic-plugins/dist/roadiehq-backstage-plugin-github-insights
+          disabled: true
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                roadiehq.backstage-plugin-github-insights:
+                  mountPoints:
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityGithubInsightsComplianceCard
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isGithubInsightsAvailable
+
+        - package: ./dynamic-plugins/dist/roadiehq-backstage-plugin-github-pull-requests
+          disabled: true
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                roadiehq.backstage-plugin-github-pull-requests:
+                  mountPoints:
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityGithubPullRequestsOverviewCard
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isGithubPullRequestsAvailable
+                    - mountPoint: entity.page.pull-requests/cards
+                      importName: EntityGithubPullRequestsContent
+                      config:
+                        layout:
+                          gridColumn: "1 / -1"
+                        if:
+                          allOf:
+                            - isGithubPullRequestsAvailable
+
+        - package: ./dynamic-plugins/dist/roadiehq-backstage-plugin-security-insights
+          disabled: true
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                roadiehq.backstage-plugin-security-insights:
+                  mountPoints:
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityDependabotAlertsCard
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isSecurityInsightsAvailable
+
+        # Group: Gitlab
+        - package: ./dynamic-plugins/dist/immobiliarelabs-backstage-plugin-gitlab-backend-dynamic
+          disabled: true
+          pluginConfig:
+            gitlab:
+              host: gitlab.cee.redhat.com
+
+        - package: ./dynamic-plugins/dist/immobiliarelabs-backstage-plugin-gitlab
+          disabled: true
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                immobiliarelabs.backstage-plugin-gitlab:
+                  mountPoints:
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityGitlabMergeRequestStatsCard
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          allOf:
+                            - isGitlabAvailable
+                    - mountPoint: entity.page.ci/cards
+                      importName: EntityGitlabPipelinesTable
+                      config:
+                        layout:
+                          gridColumn: "1 / -1"
+                        if:
+                          allOf:
+                            - isGitlabAvailable
+                    - mountPoint: entity.page.issues/cards
+                      importName: EntityGitlabIssuesTable
+                      config:
+                        layout:
+                          gridColumn: "1 / -1"
+                        if:
+                          allOf:
+                            - isGitlabAvailable
+                    - mountPoint: entity.page.pull-requests/cards
+                      importName: EntityGitlabMergeRequestsTable
+                      config:
+                        layout:
+                          gridColumn: "1 / -1"
+                        if:
+                          allOf:
+                            - isGitlabAvailable
+
+        - package: ./dynamic-plugins/dist/backstage-plugin-catalog-backend-module-gitlab-dynamic
+          disabled: false
+          pluginConfig:
+            catalog:
+              providers:
+                gitlab: {}
+
+        - package: ./dynamic-plugins/dist/backstage-plugin-scaffolder-backend-module-gitlab-dynamic
+          disabled: false
+
+        - package: ./dynamic-plugins/dist/backstage-plugin-scaffolder-backend-module-github-dynamic
+          disabled: false
+
+        - package: ./dynamic-plugins/dist/roadiehq-scaffolder-backend-module-utils-dynamic
+          disabled: true
+
+        - package: ./dynamic-plugins/dist/backstage-plugin-techdocs-backend-dynamic
+          disabled: false
+          pluginConfig:
+            # Reference documentation http://backstage.io/docs/features/techdocs/configuration
+            # Note: After experimenting with basic setup, use CI/CD to generate docs
+            # and an external cloud storage when deploying TechDocs for production use-case.
+            # https://backstage.io/docs/features/techdocs/how-to-guides#how-to-migrate-from-techdocs-basic-to-recommended-deployment-approach
+            techdocs:
+              addons:
+                enabled: true
+              builder: local
+              generator:
+                runIn: local
+              publisher:
+                type: 'awsS3'
+                awsS3:
+                  bucketName: ${TECHDOCS_S3_BUCKET}
+                  region: ${TECHDOCS_S3_REGION}
+                  endpoint: ${TECHDOCS_S3_ENDPOINT}
+                  s3ForcePathStyle: true
+                  credentials:
+                    accessKeyId: ${TECHDOCS_S3_ACCESS_KEY}
+                    secretAccessKey: ${TECHDOCS_S3_SECRET}
+
+        - package: ./dynamic-plugins/dist/backstage-plugin-techdocs
+          disabled: false
+          pluginConfig:
+            techdocs:
+              addons:
+                enabled: true
+            dynamicPlugins:
+              frontend:
+                backstage.plugin-techdocs:
+                  routeBindings:
+                    targets:
+                      - importName: techdocsPlugin
+                    bindings:
+                      - bindTarget: catalogPlugin.externalRoutes
+                        bindMap:
+                          viewTechDoc: techdocsPlugin.routes.docRoot
+                      - bindTarget: scaffolderPlugin.externalRoutes
+                        bindMap:
+                          viewTechDoc: techdocsPlugin.routes.docRoot
+                  dynamicRoutes:
+                    - path: /docs
+                      importName: TechDocsIndexPage
+                      menuItem:
+                        icon: docs
+                        text: Docs
+                    - path: /docs/:namespace/:kind/:name/*
+                      importName: TechDocsReaderPage
+                  mountPoints:
+                    - mountPoint: entity.page.docs/cards
+                      importName: EntityTechdocsContent
+                      config:
+                        layout:
+                          gridColumn: "1 / -1"
+                        if:
+                          allOf:
+                            - isTechDocsAvailable
+                    - mountPoint: search.page.results
+                      importName: TechDocsSearchResultListItem
+                    - mountPoint: search.page.filters
+                      importName: TechdocsSearchFilter
+                    - mountPoint: search.page.types
+                      importName: techdocsSearchType
+                      config:
+                        props:
+                          name: Documentation
+                          icon: docs
+
+        - package: ./dynamic-plugins/dist/backstage-community-plugin-quay
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                backstage-community.plugin-quay:
+                  mountPoints:
+                    - mountPoint: entity.page.image-registry/cards
+                      importName: QuayPage
+                      config:
+                        layout:
+                          gridColumn: 1 / -1
+                        if:
+                          anyOf:
+                          - isQuayAvailable
+
+        - package: ./dynamic-plugins/dist/backstage-plugin-kubernetes-backend-dynamic
+          disabled: false
+          pluginConfig:
+            kubernetes:
+              customResources:
+                - group: 'tekton.dev'
+                  apiVersion: 'v1beta1'
+                  plural: 'pipelines'
+                - group: 'tekton.dev'
+                  apiVersion: 'v1beta1'
+                  plural: 'pipelineruns'
+                - group: 'tekton.dev'
+                  apiVersion: 'v1beta1'
+                  plural: 'taskruns'
+                - group: 'route.openshift.io'
+                  apiVersion: 'v1'
+                  plural: 'routes'
+              serviceLocatorMethod:
+                type: 'singleTenant'
+              clusterLocatorMethods:
+                - type: 'config'
+                  clusters:
+                    - url: https://api.appsrep05ue1.zqxk.p1.openshiftapps.com:6443
+                      name: appsrep05ue1
+                      authProvider: 'serviceAccount'
+                      skipTLSVerify: false
+                      skipMetricsLookup: true
+                      serviceAccountToken: ${K8S_TOKEN_APPSREP05UE1}
+                      dashboardUrl: https://console-openshift-console.apps.appsrep05ue1.zqxk.p1.openshiftapps.com/
+                    - url: https://api.appsrep09ue1.03r5.p3.openshiftapps.com:443
+                      name: appsrep09ue1
+                      authProvider: 'serviceAccount'
+                      skipTLSVerify: false
+                      skipMetricsLookup: true
+                      serviceAccountToken: ${K8S_TOKEN_APPSREP09UE1}
+                      dashboardUrl: https://console-openshift-console.apps.rosa.appsrep09ue1.03r5.p3.openshiftapps.com/
+
+        - package: ./dynamic-plugins/dist/backstage-plugin-kubernetes
+          disabled: false
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                backstage.plugin-kubernetes:
+                  mountPoints:
+                    - mountPoint: entity.page.kubernetes/cards
+                      importName: EntityKubernetesContent
+                      config:
+                        layout:
+                          gridColumn: "1 / -1"
+                        if:
+                          anyOf:
+                            - hasAnnotation: backstage.io/show-kubernetes-frontend
+
+        - package: ./dynamic-plugins/dist/backstage-community-plugin-tekton
+          disabled: false
+
+        - package: ./dynamic-plugins/dist/backstage-plugin-catalog-backend-module-ldap-dynamic
+          disabled: false
+          pluginConfig:
+            ldap:
+              providers:
+              # TODO: fix user and group filters
+              - target: ldaps://${LDAP_HOSTNAME}
+                bind:
+                  dn: uid=${LDAP_USERNAME},ou=Users,dc=redhat,dc=com
+                  secret: ${LDAP_SECRET}
+                users:
+                  dn: ou=Users,dc=redhat,dc=com
+                  options:
+                    timeLimit: 500
+                    paged:
+                      pageSize: 1000
+                      pagePause: true
+                    filter: (mail=*)
+                groups:
+                  dn: ou=groups,dc=redhat,dc=com
+                  options:
+                    timeLimit: 500
+                    paged:
+                      pageSize: 1000
+                      pagePause: true
+                    filter: (mail=*)
+                schedule:
+                    frequency: { minutes: 60 }
+                    timeout: { minutes: 20 }
+                    initialDelay: { seconds: 15 }
+
+
+        - package: ./dynamic-plugins/dist/backstage-community-plugin-jenkins-backend-dynamic
+          disabled: true
+          pluginConfig:
+            jenkins:
+              instances:
+                - name: ci-int
+                  baseUrl: "https://ci.int.devshift.net/"
+                  username: ${JENKINS_USERNAME_CI_INT}
+                  apiKey: ${JENKINS_APIKEY_CI_INT}
+                - name: ci-ext
+                  baseUrl: "https://ci.ext.devshift.net/"
+                  username: ${JENKINS_USERNAME_CI_EXT}
+                  apiKey: ${JENKINS_APIKEY_CI_EXT}
+
+        - package: ./dynamic-plugins/dist/backstage-community-plugin-jenkins
+          disabled: true
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                backstage-community.plugin-jenkins:
+                  mountPoints:
+                    - mountPoint: entity.page.ci/cards
+                      importName: EntityJenkinsContent
+                      config:
+                        layout:
+                          gridColumn: 1 / -1
+                        if:
+                          allOf:
+                            - isJenkinsAvailable
+        - package: https://github.com/RedHatInsights/backstage-plugin-kafka-info/releases/download/v0.5.3/redhatinsights-backstage-plugin-kafka-info-dynamic-0.5.3.tgz
+          disabled: false
+          integrity: sha256-oTeuv2fFMyX3oNJ4LkSIrMc4vvVxg1DRP9Yj6K9/L5I=
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-kafka-info:
+                  mountPoints:
+                    - mountPoint: entity.page.overview/cards
+                      importName: EntityKafkaInfoContent
+                      config:
+                        layout:
+                          gridColumnEnd:
+                            lg: "span 4"
+                            md: "span 6"
+                            xs: "span 12"
+                        if:
+                          anyOf:
+                            - hasAnnotation: kafka-info/consumer-groups
+
+        - package: './dynamic-plugins/dist/backstage-community-plugin-analytics-provider-segment'
+          disabled: true  # must be disabled when using matomo
+        - package: '@janus-idp/backstage-plugin-analytics-module-matomo@1.3.1'
+          disabled: true
+          integrity: sha512-8NH8SmBP1TdpMgZbRyC+nYw2GmNfF/cV0OGNeb5bh1IKHvycjC2rnBAp6JYfVSpWpjVAyxDJWf8Dqhob1oAVzQ==
+          pluginConfig:
+            app:
+              analytics:
+                matomo:
+                  host: ${MATOMO_HOST}
+                  siteId: ${MATOMO_SITE_ID}
+            backend:
+              csp:
+                script-src: ["'self'", "'unsafe-eval'", "https://${MATOMO_HOST}"]
+            dynamicPlugins:
+              frontend:
+                janus-idp.backstage-plugin-analytics-module-matomo:
+                  apiFactories:
+                    - importName: MatomoAnalyticsApi
+
+        - package: https://github.com/RedHatInsights/backstage-plugin-metrics-and-monitoring/releases/download/v1.1.2/redhatinsights-backstage-plugin-metrics-and-monitoring-dynamic-1.1.2.tgz
+          disabled: false
+          integrity: "sha256-9jbrjfJY3RMMBoU++8nwoTWVq0LITp4foL0Tn+WP0ec="
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                redhatinsights.backstage-plugin-metrics-and-monitoring:
+                  mountPoints:
+                  - mountPoint: entity.page.monitoring/cards
+                    importName: MetricsandMonitoringContent
+                    config:
+                      layout:
+                        gridColumnEnd:
+                          lg: "span 12"
+                          md: "span 6"
+                          xs: "span 12"
+        - package: "https://github.com/mjholder/inscope-artifacts/raw/refs/heads/main/appstage-plugin/backstage-plugin-catalog-backend-module-appstage-entity-provider-dynamic-0.1.2.tgz"
+          integrity: sha256-87yG5XothmDjhOKtLLjkNt+7ksjR6vAkcXKD+B5ho5c=
+          disabled: false
+          pluginConfig:
+            catalog:
+              providers:
+                appstage:
+                  apiUrl: "http://qontract-server:4000/graphql"
+                  exclude:
+                    - User
+                  excludeByFilter:
+                    Group:
+                      metadata.name:
+                        - "-trigger"
+                  schedule: 
+                    initialDelay: { seconds: 30 }
+                    frequency: { minutes: 5 }
+                    timeout: { minutes: 4 }
+        - package: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-dynamic-home-page
+          disabled: false
+
+        - package: https://registry.npmjs.org/backstage-plugin-techdocs-addon-mermaid/-/backstage-plugin-techdocs-addon-mermaid-0.24.0.tgz
+          disabled: true
+          integrity: sha256-AzyUF9iW1ksvKW26XjbV6wE7SaY7yeAcl9FjkClquBU=
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                backstage-plugin-techdocs-addon-mermaid:
+                  techdocsAddon:
+                    importName: Mermaid
+
+        - package: "https://github.com/RedHatInsights/backstage-plugin-redhat-ai-project-space/releases/download/v1.0.15/backstage-plugin-redhat-ai-project-space-dynamic-1.0.15.tgz"
+          disabled: false
+          integrity: "sha256-NAKujkMwyoxZ45MrTAvf+6z+W/0ucjao2kSyNBQ3giI="
+          pluginConfig:
+            dynamicPlugins:
+              frontend:
+                backstage-plugin-redhat-ai-project-space:
+                  dynamicRoutes:
+                    - path: /ai-projects
+                      importName: AIShowcasePageComponent
+                      menuItem:
+                        icon: 'extension'
+                        text: "AI Projects"
+                        
+        - package: "https://github.com/RedHatInsights/backstage-plugin-redhat-ai-project-space/releases/download/v1.0.15/backstage-plugin-redhat-ai-project-space-backend-dynamic-1.0.0.tgz"
+          integrity: "sha256-7jwD5XOHWpVaJUK9DxppeA1WzK+3SmWUWCU+imf5QBs="
+          disabled: false
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: qontract-server
+      labels:
+        app: qontract-server
+    spec:
+      type: ClusterIP
+      ports:
+        - protocol: TCP
+          port: 4000
+          targetPort: 4000
+          name: http
+      selector:
+        app: qontract-server
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: qontract-server
+      labels:
+        app: qontract-server
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: qontract-server
+      template:
+        metadata:
+          labels:
+            app: qontract-server
+        spec:
+          containers:
+            - name: qontract-server
+              image: quay.io/redhat-services-prod/app-sre-tenant/qontract-server-master/qontract-server-master:latest
+              imagePullPolicy: Always
+              ports:
+                - name: http
+                  containerPort: 4000
+                  protocol: TCP
+              env:
+                - name: LOAD_METHOD
+                  value: "fs"
+                - name: DATAFILES_FILE
+                  value: "/data/bundle/bundle.json"
+                - name: NODE_ENV
+                  value: "production"
+                - name: NODE_OPTIONS
+                  value: "--max-old-space-size=4096"
+              volumeMounts:
+                - name: bundle-data
+                  mountPath: /data/bundle
+                  readOnly: true
+              livenessProbe:
+                httpGet:
+                  path: /healthz
+                  port: 4000
+                  scheme: HTTP
+                initialDelaySeconds: 30
+                periodSeconds: 20
+                timeoutSeconds: 10
+                failureThreshold: 3
+              readinessProbe:
+                httpGet:
+                  path: /healthz
+                  port: 4000
+                  scheme: HTTP
+                initialDelaySeconds: 10
+                periodSeconds: 20
+                timeoutSeconds: 10
+                failureThreshold: 3
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "30m"
+                limits:
+                  memory: "512Mi"
+          volumes:
+            - name: bundle-data
+              persistentVolumeClaim:
+                claimName: qontract-bundle-pvc
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: qontract-bundle-pvc
+      labels:
+        app: qontract-server
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+      # Uncomment and specify a storageClassName if your cluster requires it
+      # storageClassName: standard
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: qontract-bundle-uploader
+      labels:
+        app: qontract-server
+        component: bundle-uploader
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: uploader
+          image: registry.access.redhat.com/ubi9/ubi:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            [
+              "echo 'Bundle uploader pod ready. Use: oc cp /path/to/bundle.json qontract-bundle-uploader:/data/bundle/bundle.json' && sleep 3600",
+            ]
+          volumeMounts:
+            - name: bundle-data
+              mountPath: /data/bundle
+      volumes:
+        - name: bundle-data
+          persistentVolumeClaim:
+            claimName: qontract-bundle-pvc
