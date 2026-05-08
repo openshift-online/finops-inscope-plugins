@@ -817,9 +817,9 @@ objects:
                       menuItem:
                         icon: 'kind:resource'
                         text: Firelink
-        - package: "https://github.com/theute/finops-backstage/releases/download/build-12/backstage-finops-frontend.tgz"
+        - package: "https://github.com/openshift-online/finops-inscope-plugins/releases/download/build-2/backstage-finops-frontend.tgz"
           disabled: false
-          integrity: "sha256-OJoh68YRWGF4ITAkbPKyirglRcgrh0Ntps9G4+xG7Ts="
+          integrity: "sha256-B+/ykxKra4QWhd4jLAM19g2yHviZDTVBFbNDsFfAaKw="
           pluginConfig:
             dynamicPlugins:
               frontend:
@@ -834,9 +834,9 @@ objects:
                       importName: FinOpsCRAPage
                     - path: /finops/cra
                       importName: FinOpsCRAPage
-        - package: "https://github.com/theute/finops-backstage/releases/download/build-12/backstage-finops-backend.tgz"
+        - package: "https://github.com/openshift-online/finops-inscope-plugins/releases/download/build-2/backstage-finops-backend.tgz"
           disabled: false
-          integrity: "sha256-gwZPhgSC+EGI1gpYGbV5vPnCGDC/uVS3ytndVykPBlU="
+          integrity: "sha256-Op1nIBNt6XNwQFLGVA+zwkSFkrRyPU1W6D9NxbjmsmU="
           pluginConfig:
             finops:
               snowflake:
