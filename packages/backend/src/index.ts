@@ -66,4 +66,5 @@ backend.add(import('@backstage/plugin-signals-backend'));
 // mcp actions plugin
 backend.add(import('@backstage/plugin-mcp-actions-backend'));
 
+backend.add(import('@internal/backstage-plugin-finops-backend'));
 backend.start();
