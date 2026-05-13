@@ -65,6 +65,11 @@ integrations:
     #   token: ${GHE_TOKEN}
 
 proxy:
+  endpoints:
+    '/finops':
+      target: http://localhost:7007/api/finops
+      credentials: dangerously-allow-unauthenticated
+      changeOrigin: true
   ### Example for how to add a proxy endpoint for the frontend.
   ### A typical reason to do this is to handle HTTPS and CORS for internal services.
   # endpoints:
@@ -149,3 +154,18 @@ permission:
 mcpActions:
   name: 'My Company Backstage' # defaults to "backstage"
   description: 'Tools for managing your software catalog, creating new services from templates, and exploring your developer portal' # optional
+
+finops:
+  snowflake:
+    account: GDADCLC-RHSANDBOX
+    user: dataverse_webapphcmfinops_sandbox_appuser
+    privateKeyPath: ${SNOWFLAKE_PRIVATE_KEY_PATH}
+    warehouse: DEFAULT
+    database: HCMFINOPSSOURCE_DB
+    schema: MARTS
+    role: DATAVERSE_WEBAPPHCMFINOPS_ROLE
+    queryTag: finops-backend
+    poolMaxSize: 8
+    table: cra_scope_costs
+    dimTeamTable: cra_team_directory
+    bridgeTeamScopeTable: cra_team_attributed_scopes

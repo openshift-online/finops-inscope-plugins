@@ -1,67 +1,51 @@
-import {
-  mockCredentials,
-  mockErrorHandler,
-  mockServices,
-} from '@backstage/backend-test-utils';
+import { mockServices } from '@backstage/backend-test-utils';
 import express from 'express';
 import request from 'supertest';
 
-import { createRouter } from './router';
-import { todoListServiceRef } from './services/TodoListService';
+import type { FinopsRepository } from './repository';
+import { createFinopsRouter } from './router';
 
-const mockTodoItem = {
-  title: 'Do the thing',
-  id: '123',
-  createdBy: mockCredentials.user().principal.userEntityRef,
-  createdAt: new Date().toISOString(),
-};
-
-// TEMPLATE NOTE:
-// Testing the router directly allows you to write a unit test that mocks the provided options.
-describe('createRouter', () => {
+describe('createFinopsRouter', () => {
   let app: express.Express;
-  let todoList: jest.Mocked<typeof todoListServiceRef.T>;
 
-  beforeEach(async () => {
-    todoList = {
-      createTodo: jest.fn(),
-      listTodos: jest.fn(),
-      getTodo: jest.fn(),
+  beforeEach(() => {
+    const repository: Pick<
+      FinopsRepository,
+      'listTeams' | 'listScopes' | 'listTeamsForScopes' | 'getTrends' | 'getSummary'
+    > = {
+      listTeams: jest.fn().mockResolvedValue([]),
+      listScopes: jest.fn().mockResolvedValue([]),
+      listTeamsForScopes: jest.fn().mockResolvedValue([]),
+      getTrends: jest.fn().mockResolvedValue([]),
+      getSummary: jest.fn().mockResolvedValue({
+        metric: 'unblended_amount',
+        scope: null,
+        start_date: '2025-01-01',
+        end_date: '2025-01-31',
+        total: 0,
+        previous_total: 0,
+        delta: 0,
+        delta_percent: null,
+      }),
     };
-    const router = await createRouter({
-      httpAuth: mockServices.httpAuth(),
-      todoList,
+
+    const router = createFinopsRouter({
+      repository: repository as FinopsRepository,
+      logger: mockServices.logger.mock(),
     });
     app = express();
     app.use(router);
-    app.use(mockErrorHandler());
   });
 
-  it('should create a TODO', async () => {
-    todoList.createTodo.mockResolvedValue(mockTodoItem);
-
-    const response = await request(app).post('/todos').send({
-      title: 'Do the thing',
-    });
-
-    expect(response.status).toBe(201);
-    expect(response.body).toEqual(mockTodoItem);
+  it('returns health ok', async () => {
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: 'ok' });
   });
 
-  it('should not allow unauthenticated requests to create a TODO', async () => {
-    todoList.createTodo.mockResolvedValue(mockTodoItem);
-
-    // TEMPLATE NOTE:
-    // The HttpAuth mock service considers all requests to be authenticated as a
-    // mock user by default. In order to test other cases we need to explicitly
-    // pass an authorization header with mock credentials.
-    const response = await request(app)
-      .post('/todos')
-      .set('Authorization', mockCredentials.none.header())
-      .send({
-        title: 'Do the thing',
-      });
-
-    expect(response.status).toBe(401);
+  it('lists teams', async () => {
+    const res = await request(app).get('/api/teams');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
   });
 });
