@@ -6,14 +6,23 @@ This repo is a [Backstage](https://backstage.io) developer portal wired for **Fi
 
 - **Node.js** 22 or 24 (see root `package.json` `engines`).
 - **Yarn** 4 (Berry) — the repo pins `packageManager` in `package.json`.
-- A **Snowflake private key** (`.p8`) on disk for the app user configured in `app-config.yaml`.
+- A **Snowflake private key** (`.p8`) on disk for the app user configured in `app-config.yaml`. For local development you can use the **Dataverse sandbox service account**: put that account’s key on disk and set `finops.snowflake.user` in `app-config.yaml` to match that user.
 
 ## Snowflake key (required before start)
+
+The `.p8` file must be a **PEM-encoded PKCS#8 private key** (plain text). It should look like this:
+
+```
+-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...
+(more base64 lines)
+-----END PRIVATE KEY-----
+```
 
 The backend reads the key path from `finops.snowflake.privateKeyPath`, which resolves `${SNOWFLAKE_PRIVATE_KEY_PATH}`. Export it in every shell where you run the app:
 
 ```sh
-export SNOWFLAKE_PRIVATE_KEY_PATH=$HOME/.secrets/finops/snowflake_sandox_private_key.p8
+export SNOWFLAKE_PRIVATE_KEY_PATH=$HOME/.secrets/finops/snowflake_sandbox_private_key.p8
 ```
 
 Adjust the path if your key file lives elsewhere.

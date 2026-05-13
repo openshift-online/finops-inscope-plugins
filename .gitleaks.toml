@@ -1,0 +1,10 @@
+# Appended by rh-pre-commit / leaktk-gitleaks7 as `--additional-config` (Gitleaks v7
+# schema). Upstream zricethezav/gitleaks v8 configs are not accepted here — they log
+# "Rule  does not define any actionable data" and are ignored.
+title = "FinOps Backstage — rh-gitleaks allowlist append"
+
+[allowlist]
+description = "README documents PEM layout for Snowflake `.p8`; not a real key."
+paths = [
+  '''(?:^|[\\/])README\.md$''',
+]
