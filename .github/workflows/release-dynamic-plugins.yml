@@ -25,12 +25,11 @@ jobs:
         run: |
           corepack enable
           yarn install --immutable
+          yarn tsc
 
       - name: Build frontend dynamic plugin tgz
         run: |
           mkdir -p dist
-          mkdir -p plugins/finops/dist-types/src
-          printf 'export {}\n' > plugins/finops/dist-types/src/index.d.ts
           yarn workspace @internal/backstage-plugin-finops build
           cd plugins/finops
           npx @red-hat-developer-hub/cli@latest plugin export
@@ -40,8 +39,6 @@ jobs:
 
       - name: Build backend dynamic plugin tgz
         run: |
-          mkdir -p plugins/finops-backend/dist-types/src
-          printf 'export {}\n' > plugins/finops-backend/dist-types/src/index.d.ts
           yarn workspace @internal/backstage-plugin-finops-backend build
           cd plugins/finops-backend
           npx @red-hat-developer-hub/cli@latest plugin export

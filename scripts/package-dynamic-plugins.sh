@@ -7,14 +7,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-echo "==> Installing dependencies (yarn install --immutable)"
+echo "==> Installing dependencies and generating declaration files"
 corepack enable
 yarn install --immutable
+yarn tsc
 
 echo "==> Building frontend dynamic plugin"
 mkdir -p dist
-mkdir -p plugins/finops/dist-types/src
-printf 'export {}\n' > plugins/finops/dist-types/src/index.d.ts
 yarn workspace @internal/backstage-plugin-finops build
 (
   cd plugins/finops
@@ -25,8 +24,6 @@ yarn workspace @internal/backstage-plugin-finops build
 )
 
 echo "==> Building backend dynamic plugin"
-mkdir -p plugins/finops-backend/dist-types/src
-printf 'export {}\n' > plugins/finops-backend/dist-types/src/index.d.ts
 yarn workspace @internal/backstage-plugin-finops-backend build
 (
   cd plugins/finops-backend
