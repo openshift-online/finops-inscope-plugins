@@ -1,20 +1,21 @@
+import { jsx } from 'react/jsx-runtime';
 import {
   createFrontendPlugin,
   PageBlueprint,
 } from '@backstage/frontend-plugin-api';
+import ShowChartIcon from '@material-ui/icons/ShowChart';
 
 import { rootRouteRef } from './routes';
 
 export const finopsPage = PageBlueprint.make({
-  name: 'landing',
+  name: 'main',
   params: {
     path: '/finops',
     title: 'FinOps',
+    icon: jsx(ShowChartIcon, { fontSize: 'inherit' }),
     routeRef: rootRouteRef,
     loader: () =>
-      import('./components/FinOpsPage').then(m => (
-        <m.FinOpsLandingPage />
-      )),
+      import('./components/FinOpsPage').then(m => <m.FinOpsLandingPage />),
   },
 });
 
@@ -22,10 +23,20 @@ export const finopsCraPage = PageBlueprint.make({
   name: 'cra',
   params: {
     path: '/finops/cra',
-    title: 'FinOps Cloud Resources Attribution',
+    title: 'CRA',
     loader: () =>
-      import('./components/FinOpsCRAPage').then(m => (
-        <m.FinOpsCRAPage />
+      import('./components/FinOpsCRAPage').then(m => <m.FinOpsCRAPage />),
+  },
+});
+
+export const finopsAwsAccountsPage = PageBlueprint.make({
+  name: 'awsAccounts',
+  params: {
+    path: '/finops/aws-accounts',
+    title: 'AWS Accounts',
+    loader: () =>
+      import('./components/FinOpsAwsAccountTrackerPage').then(m => (
+        <m.FinOpsAwsAccountTrackerPage />
       )),
   },
 });
@@ -34,29 +45,20 @@ export const finopsRosaPage = PageBlueprint.make({
   name: 'rosa',
   params: {
     path: '/finops/rosa',
-    title: 'FinOps ROSA',
+    title: 'ROSA',
     loader: () =>
-      import('./components/FinOpsPage').then(m => (
-        <m.FinOpsROSAPage />
-      )),
-  },
-});
-
-export const finopsAwsAccountsPage = PageBlueprint.make({
-  name: 'awsAccounts',
-  params: {
-    path: '/finops/aws-accounts',
-    title: 'FinOps AWS Account Tracker',
-    loader: () =>
-      import('./components/FinOpsAwsAccountTrackerPage').then(m => (
-        <m.FinOpsAwsAccountTrackerPage />
-      )),
+      import('./components/FinOpsPage').then(m => <m.FinOpsROSAPage />),
   },
 });
 
 export const finopsPlugin = createFrontendPlugin({
   pluginId: 'finops',
-  extensions: [finopsPage, finopsCraPage, finopsRosaPage, finopsAwsAccountsPage],
+  extensions: [
+    finopsPage,
+    finopsCraPage,
+    finopsAwsAccountsPage,
+    finopsRosaPage,
+  ],
   routes: {
     root: rootRouteRef,
   },

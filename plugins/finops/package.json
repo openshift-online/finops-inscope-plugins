@@ -37,6 +37,7 @@
     "@backstage/frontend-plugin-api": "^0.16.0",
     "@backstage/theme": "^0.7.3",
     "@backstage/ui": "^0.14.0",
+    "@material-ui/icons": "^4.9.1",
     "react-use": "^17.2.4",
     "recharts": "^2.15.4"
   },

@@ -20,6 +20,19 @@ plugins:
                 importName: FinOpsROSAPage
               - path: /finops/aws-accounts
                 importName: FinOpsAwsAccountTrackerPage
+            menuItems:
+              finops:
+                icon: kind:resource
+                title: FinOps
+              finops.cra:
+                parent: finops
+                title: CRA
+              finops.aws-accounts:
+                parent: finops
+                title: AWS Accounts
+              finops.rosa:
+                parent: finops
+                title: ROSA
 
   # Backend artifact from the same release tag.
   - package: https://github.com/openshift-online/finops-inscope-plugins/releases/download/v0.2.0/backstage-finops-backend.tgz
