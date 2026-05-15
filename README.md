@@ -83,16 +83,20 @@ Each release includes:
 
 Copy the single-line contents of `backstage-finops-frontend.tgz.integrity` and `backstage-finops-backend.tgz.integrity` into your deployment manifest (`test-extras.yml`, cluster `dynamic-plugins` CR, etc.), and set `package` URLs to `https://github.com/openshift-online/finops-inscope-plugins/releases/download/<tag>/backstage-finops-*.tgz`.
 
-To dry-run the build locally (without publishing):
+### Test the release build locally (before pushing a tag)
+
+Use **Node.js 22** (same as CI). From the repo root, run the same steps as GitHub Actions:
 
 ```sh
-yarn build:dynamic-plugins
-cd plugins/finops && yarn export-dynamic && yarn pack-dynamic
-cd ../finops-backend && yarn export-dynamic && yarn pack-dynamic
+yarn package:dynamic-plugins
 ```
 
-You can compute SRI integrity for a local `.tgz` with:
+This produces `dist/backstage-finops-frontend.tgz`, `dist/backstage-finops-backend.tgz`, plus `.sha256` and `.integrity` files. The script prints the SRI strings to paste into your dynamic plugin manifest.
+
+Equivalent one-liner:
 
 ```sh
-echo -n "sha256-$(openssl dgst -sha256 -binary path/to/artifact.tgz | openssl base64 -A)"
+./scripts/package-dynamic-plugins.sh
 ```
+
+Artifacts land in `dist/` (gitignored). If this succeeds locally, the tag push workflow should succeed on Linux CI.

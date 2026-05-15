@@ -29,11 +29,8 @@ jobs:
       - name: Build frontend dynamic plugin tgz
         run: |
           mkdir -p dist
-          cd plugins/finops
-          npm install --no-save --legacy-peer-deps @rollup/rollup-linux-x64-gnu @rspack/binding-linux-x64-gnu
-          mkdir -p dist-types/src
-          printf 'export {}\n' > dist-types/src/index.d.ts
-          cd ../..
+          mkdir -p plugins/finops/dist-types/src
+          printf 'export {}\n' > plugins/finops/dist-types/src/index.d.ts
           yarn workspace @internal/backstage-plugin-finops build
           cd plugins/finops
           npx @red-hat-developer-hub/cli@latest plugin export
@@ -43,11 +40,8 @@ jobs:
 
       - name: Build backend dynamic plugin tgz
         run: |
-          cd plugins/finops-backend
-          npm install --no-save --legacy-peer-deps @rollup/rollup-linux-x64-gnu @rspack/binding-linux-x64-gnu
-          mkdir -p dist-types/src
-          printf 'export {}\n' > dist-types/src/index.d.ts
-          cd ../..
+          mkdir -p plugins/finops-backend/dist-types/src
+          printf 'export {}\n' > plugins/finops-backend/dist-types/src/index.d.ts
           yarn workspace @internal/backstage-plugin-finops-backend build
           cd plugins/finops-backend
           npx @red-hat-developer-hub/cli@latest plugin export

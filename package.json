@@ -9,6 +9,7 @@
     "start": "backstage-cli repo start",
     "build:backend": "yarn workspace backend build",
     "build:dynamic-plugins": "yarn workspace @internal/backstage-plugin-finops build && yarn workspace @internal/backstage-plugin-finops-backend build",
+    "package:dynamic-plugins": "bash scripts/package-dynamic-plugins.sh",
     "build:all": "backstage-cli repo build --all",
     "build-image": "yarn workspace backend build-image",
     "tsc": "tsc",
