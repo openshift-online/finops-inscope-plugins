@@ -17,6 +17,8 @@
   "scripts": {
     "start": "backstage-cli package start",
     "build": "backstage-cli package build",
+    "export-dynamic": "npx @red-hat-developer-hub/cli@latest plugin export",
+    "pack-dynamic": "cd dist-dynamic && npm pack",
     "lint": "backstage-cli package lint",
     "test": "backstage-cli package test",
     "clean": "backstage-cli package clean",

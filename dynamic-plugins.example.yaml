@@ -1,0 +1,49 @@
+plugins:
+  # Frontend artifact from a semver GitHub release (replace v0.2.0 with your tag).
+  - package: https://github.com/openshift-online/finops-inscope-plugins/releases/download/v0.2.0/backstage-finops-frontend.tgz
+    # Copy from backstage-finops-frontend.tgz.integrity on the same release (SRI, not hex sha256sum).
+    integrity: sha256-<frontend-sha256-base64>
+    disabled: false
+    pluginConfig:
+      dynamicPlugins:
+        frontend:
+          internal.backstage-plugin-finops:
+            dynamicRoutes:
+              - path: /finops
+                importName: FinOpsPage
+                menuItem:
+                  icon: kind:resource
+                  text: FinOps
+              - path: /finops/cra
+                importName: FinOpsCRAPage
+              - path: /finops/rosa
+                importName: FinOpsROSAPage
+              - path: /finops/aws-accounts
+                importName: FinOpsAwsAccountTrackerPage
+
+  # Backend artifact from the same release tag.
+  - package: https://github.com/openshift-online/finops-inscope-plugins/releases/download/v0.2.0/backstage-finops-backend.tgz
+    integrity: sha256-<backend-sha256-base64>
+    disabled: false
+    pluginConfig:
+      proxy:
+        endpoints:
+          '/finops':
+            target: http://localhost:7007/api/finops
+            credentials: dangerously-allow-unauthenticated
+            changeOrigin: true
+      finops:
+        snowflake:
+          account: ${SNOWFLAKE_ACCOUNT}
+          user: ${SNOWFLAKE_USER}
+          privateKeyPath: ${SNOWFLAKE_PRIVATE_KEY_PATH}
+          warehouse: ${SNOWFLAKE_WAREHOUSE}
+          database: ${SNOWFLAKE_DATABASE}
+          schema: ${SNOWFLAKE_SCHEMA}
+          role: ${SNOWFLAKE_ROLE}
+          queryTag: finops-backend
+          poolMaxSize: 8
+          table: cra_scope_costs
+          dimTeamTable: cra_team_directory
+          bridgeTeamScopeTable: cra_team_attributed_scopes
+          awsAccountsHistoricalTable: aws_accounts_historical_count

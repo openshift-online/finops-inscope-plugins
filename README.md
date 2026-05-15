@@ -59,3 +59,40 @@ yarn workspace @internal/backstage-plugin-finops-backend build
 ```
 
 Production-oriented config overrides are in [`app-config.production.yaml`](app-config.production.yaml).
+
+## Releasing dynamic plugins
+
+FinOps frontend and backend plugins are published as `.tgz` dynamic plugin bundles on **semver GitHub releases** (for example `v0.2.0`). See [`dynamic-plugins.example.yaml`](dynamic-plugins.example.yaml) for how to wire them into RHDH/OpenShift.
+
+1. Optionally bump `version` in `plugins/finops/package.json` and `plugins/finops-backend/package.json`.
+2. Commit your changes on `main`.
+3. Create and push a tag:
+   ```sh
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+4. GitHub Actions ([`.github/workflows/release-dynamic-plugins.yml`](.github/workflows/release-dynamic-plugins.yml)) builds both plugins, attaches artifacts to the release, and writes checksum files.
+
+Each release includes:
+
+| Artifact | Use |
+|----------|-----|
+| `backstage-finops-frontend.tgz` / `backstage-finops-backend.tgz` | `package` URL in dynamic plugin config |
+| `*.integrity` | `integrity` field (`sha256-<base64>` SRI) |
+| `*.sha256` | Hex checksum for manual verification |
+
+Copy the single-line contents of `backstage-finops-frontend.tgz.integrity` and `backstage-finops-backend.tgz.integrity` into your deployment manifest (`test-extras.yml`, cluster `dynamic-plugins` CR, etc.), and set `package` URLs to `https://github.com/openshift-online/finops-inscope-plugins/releases/download/<tag>/backstage-finops-*.tgz`.
+
+To dry-run the build locally (without publishing):
+
+```sh
+yarn build:dynamic-plugins
+cd plugins/finops && yarn export-dynamic && yarn pack-dynamic
+cd ../finops-backend && yarn export-dynamic && yarn pack-dynamic
+```
+
+You can compute SRI integrity for a local `.tgz` with:
+
+```sh
+echo -n "sha256-$(openssl dgst -sha256 -binary path/to/artifact.tgz | openssl base64 -A)"
+```

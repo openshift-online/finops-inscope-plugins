@@ -12,12 +12,20 @@
   },
   "backstage": {
     "role": "frontend-plugin",
-    "pluginId": "finops"
+    "pluginId": "finops",
+    "pluginPackages": [
+      "@internal/backstage-plugin-finops"
+    ],
+    "features": {
+      ".": "@backstage/FrontendPlugin"
+    }
   },
   "sideEffects": false,
   "scripts": {
     "start": "backstage-cli package start",
     "build": "backstage-cli package build",
+    "export-dynamic": "npx @red-hat-developer-hub/cli@latest plugin export",
+    "pack-dynamic": "cd dist-dynamic && npm pack",
     "lint": "backstage-cli package lint",
     "test": "backstage-cli package test",
     "clean": "backstage-cli package clean",
@@ -51,6 +59,15 @@
     "react-router-dom": "^6.0.0"
   },
   "files": [
-    "dist"
-  ]
+    "dist",
+    "dist-scalprum"
+  ],
+  "typesVersions": {
+    "*": {
+      "package.json": [
+        "package.json"
+      ]
+    }
+  },
+  "module": "./dist/index.esm.js"
 }
