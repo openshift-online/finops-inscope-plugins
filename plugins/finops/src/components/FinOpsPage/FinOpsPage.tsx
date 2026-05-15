@@ -32,6 +32,16 @@ export const FinOpsLandingPage = () => {
           </article>
 
           <article style={cardStyle}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>FinOps AWS Account Tracker</h3>
+            <p style={{ margin: 0 }}>
+              Historical active, closed, and deleted linked AWS accounts per payer.
+            </p>
+            <a href="/finops/aws-accounts" style={linkStyle}>
+              Open AWS Account Tracker
+            </a>
+          </article>
+
+          <article style={cardStyle}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>FinOps ROSA</h3>
             <p style={{ margin: 0 }}>
               Temporary mockup page for ROSA-specific FinOps insights.

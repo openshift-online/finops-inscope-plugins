@@ -1,11 +1,5 @@
-import {
-  Box,
-  Button,
-  Checkbox,
-  Flex,
-  FieldLabel,
-  Text,
-} from '@backstage/ui';
+import { Box, Checkbox, Flex, FieldLabel } from '@backstage/ui';
+import { FinOpsDateRangeFilters } from '../../shared/FinOpsDateRangeFilters';
 import {
   ALL_USAGE_METRICS,
   type CostMetric,
@@ -27,6 +21,9 @@ type FinOpsCraFiltersProps = {
   onApplyCurrentMonth: () => void;
   onApplyPastMonth: () => void;
   onApplyLastSevenDaysOfData: () => void | Promise<void>;
+  dateRangeMessage?: string | null;
+  onApplyDateRange: () => void;
+  applyDateRangeDisabled?: boolean;
   teams: TeamItem[];
   selectedTeamId: string;
   onTeamChange: (teamId: string) => void;
@@ -51,50 +48,20 @@ const providerTypes = Object.keys(providerLabels) as ProviderType[];
 export function FinOpsCraFilters(props: FinOpsCraFiltersProps) {
   return (
     <Flex direction="column" gap="5">
-      <Box>
-        <Box style={{ marginBottom: 8 }}>
-          <Text as="div" variant="body-x-small" color="secondary">
-            Date range
-          </Text>
-        </Box>
-        <Flex direction="column" gap="3">
-          <Box>
-            <FieldLabel label="From" htmlFor="finops-cra-from-date" />
-            <input
-              id="finops-cra-from-date"
-              aria-label="From date"
-              type="date"
-              value={props.fromDate}
-              onChange={event => props.onFromDateChange(event.target.value)}
-            />
-          </Box>
-          <Box>
-            <FieldLabel label="To" htmlFor="finops-cra-to-date" />
-            <input
-              id="finops-cra-to-date"
-              aria-label="To date"
-              type="date"
-              value={props.toDate}
-              onChange={event => props.onToDateChange(event.target.value)}
-            />
-          </Box>
-        </Flex>
-      </Box>
-
-      <Flex direction="column" gap="2">
-        <Button variant="secondary" onPress={props.onApplyLastThirtyDays}>
-          Last 30 days
-        </Button>
-        <Button variant="secondary" onPress={props.onApplyCurrentMonth}>
-          Current month
-        </Button>
-        <Button variant="secondary" onPress={props.onApplyPastMonth}>
-          Past month
-        </Button>
-        <Button variant="secondary" onPress={() => void props.onApplyLastSevenDaysOfData()}>
-          Last 7 days of data
-        </Button>
-      </Flex>
+      <FinOpsDateRangeFilters
+        idPrefix="finops-cra"
+        fromDate={props.fromDate}
+        toDate={props.toDate}
+        onFromDateChange={props.onFromDateChange}
+        onToDateChange={props.onToDateChange}
+        onApplyLastThirtyDays={props.onApplyLastThirtyDays}
+        onApplyCurrentMonth={props.onApplyCurrentMonth}
+        onApplyPastMonth={props.onApplyPastMonth}
+        onApplyLastSevenDaysOfData={props.onApplyLastSevenDaysOfData}
+        dateRangeMessage={props.dateRangeMessage}
+        onApplyDateRange={props.onApplyDateRange}
+        applyDateRangeDisabled={props.applyDateRangeDisabled}
+      />
 
       <Box>
         <FieldLabel label="Provider type" />

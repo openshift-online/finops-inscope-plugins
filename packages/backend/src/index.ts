@@ -6,6 +6,8 @@
  * Happy hacking!
  */
 
+import './polyfills';
+
 import { createBackend } from '@backstage/backend-defaults';
 
 const backend = createBackend();

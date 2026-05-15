@@ -169,3 +169,4 @@ finops:
     table: cra_scope_costs
     dimTeamTable: cra_team_directory
     bridgeTeamScopeTable: cra_team_attributed_scopes
+    awsAccountsHistoricalTable: aws_accounts_historical_count

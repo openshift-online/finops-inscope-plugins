@@ -1,18 +1,9 @@
 import { Progress } from '@backstage/core-components';
 import { configApiRef, fetchApiRef, useApi } from '@backstage/frontend-plugin-api';
-import {
-  Box,
-  Card,
-  CardBody,
-  CardHeader,
-  Container,
-  Flex,
-  FullPage,
-  Header,
-  Text,
-} from '@backstage/ui';
+import { Box, Container, Flex, FullPage, Header, Text } from '@backstage/ui';
 import { useMemo, useState, type ReactNode } from 'react';
 import { createLiveFinOpsDataSource } from '../../data/finopsDataSource';
+import { FinOpsFiltersSidebar } from '../shared/FinOpsFiltersSidebar';
 import { FinOpsCraFilters } from './components/FinOpsCraFilters';
 import { FinOpsCraScopeCostHeader } from './components/FinOpsCraScopeCostHeader';
 import { FinOpsCraScopeTeamsSection } from './components/FinOpsCraScopeTeamsSection';
@@ -71,44 +62,33 @@ export const FinOpsCRAPage = () => {
       <FullPage>
         <Container py="6">
           <Flex direction={{ initial: 'column', md: 'row' }} gap={{ initial: '4', md: '6' }} align="start">
-            <Box
-              width={{ initial: '100%', md: 'auto' }}
-              maxWidth={{ initial: 'min(100%, 19rem)', md: '19rem' }}
-              mx={{ initial: 'auto', md: '0' }}
-              style={{ flexShrink: 0 }}
-            >
-              <Card>
-                <CardHeader>
-                  <Text as="h2" variant="title-small" weight="bold">
-                    Filters
-                  </Text>
-                </CardHeader>
-                <CardBody>
-                  <FinOpsCraFilters
-                    fromDate={model.fromDate}
-                    toDate={model.toDate}
-                    onFromDateChange={model.setFromDate}
-                    onToDateChange={model.setToDate}
-                    selectedProviderTypes={model.selectedProviderTypes}
-                    onToggleProviderType={model.toggleProviderType}
-                    onApplyLastThirtyDays={() => model.applyQuickPreset('last_30_days')}
-                    onApplyCurrentMonth={() => model.applyQuickPreset('current_month')}
-                    onApplyPastMonth={() => model.applyQuickPreset('past_month')}
-                    onApplyLastSevenDaysOfData={model.applyLastSevenDaysOfData}
-                    teams={model.teams}
-                    selectedTeamId={model.selectedTeamId}
-                    onTeamChange={model.setSelectedTeamId}
-                    scopes={model.scopes}
-                    selectedScopeSlug={model.selectedScopeSlug}
-                    onScopeChange={model.setSelectedScopeSlug}
-                    costMetric={model.costMetric}
-                    onCostMetricChange={model.setCostMetric}
-                    selectedUsageMetrics={model.selectedUsageMetrics}
-                    onToggleUsageMetric={model.toggleUsageMetric}
-                  />
-                </CardBody>
-              </Card>
-            </Box>
+            <FinOpsFiltersSidebar>
+              <FinOpsCraFilters
+                fromDate={model.fromDate}
+                toDate={model.toDate}
+                onFromDateChange={model.setFromDate}
+                onToDateChange={model.setToDate}
+                selectedProviderTypes={model.selectedProviderTypes}
+                onToggleProviderType={model.toggleProviderType}
+                onApplyLastThirtyDays={() => model.applyQuickPreset('last_30_days')}
+                onApplyCurrentMonth={() => model.applyQuickPreset('current_month')}
+                onApplyPastMonth={() => model.applyQuickPreset('past_month')}
+                onApplyLastSevenDaysOfData={model.applyLastSevenDaysOfData}
+                dateRangeMessage={model.dateRangeMessage}
+                onApplyDateRange={model.applyDateRange}
+                applyDateRangeDisabled={model.applyDateRangeDisabled}
+                teams={model.teams}
+                selectedTeamId={model.selectedTeamId}
+                onTeamChange={model.setSelectedTeamId}
+                scopes={model.scopes}
+                selectedScopeSlug={model.selectedScopeSlug}
+                onScopeChange={model.setSelectedScopeSlug}
+                costMetric={model.costMetric}
+                onCostMetricChange={model.setCostMetric}
+                selectedUsageMetrics={model.selectedUsageMetrics}
+                onToggleUsageMetric={model.toggleUsageMetric}
+              />
+            </FinOpsFiltersSidebar>
             <Box width={{ md: '100%' }} style={{ flex: 1, minWidth: 0 }}>
               <Flex direction="column" gap="6">
                 {model.scopeTeamsAttributionError ? (
@@ -116,7 +96,9 @@ export const FinOpsCRAPage = () => {
                     Team attribution for scopes could not be loaded.
                   </Text>
                 ) : null}
-                {model.scopeTrendCharts.length === 0 ? (
+                {!model.isRangeValid ? (
+                  <p>Adjust the date range to load charts.</p>
+                ) : model.scopeTrendCharts.length === 0 ? (
                   <p>No scopes match the current provider filters.</p>
                 ) : (
                   model.scopeTrendCharts.map(entry => {

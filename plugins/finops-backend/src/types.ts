@@ -68,3 +68,20 @@ export type SummaryQuery = {
   scope?: string | null;
   team?: string | null;
 };
+
+export type AwsAccountsHistoricalPoint = {
+  period: string;
+  payer_account_id: string;
+  active_count: number;
+  closed_count: number;
+  deleted_count: number;
+};
+
+export type AwsAccountsLatestPeriodResponse = {
+  period: string | null;
+};
+
+export type AwsAccountsHistoricalQuery = {
+  fromDate: string;
+  toDate: string;
+};

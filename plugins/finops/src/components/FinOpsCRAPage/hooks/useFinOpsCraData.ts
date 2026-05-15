@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useAsync from 'react-use/esm/useAsync';
+import {
+  addDays,
+  DATE_QUERY_PARAM,
+  previousWindow,
+  replaceQueryParams,
+  toIsoDate,
+} from '../../shared/dateRangeUtils';
+import { useFinOpsDateRange } from '../../shared/useFinOpsDateRange';
 import type { FinOpsDataSource } from '../../../data/finopsDataSource';
 import {
   ALL_USAGE_METRICS,
   type CostMetric,
   type ProviderType,
-  type QuickDatePreset,
   type ScopeItem,
   type TeamItem,
   type TrendPoint,
@@ -32,19 +39,12 @@ export type ScopeTrendChartModel = {
   scope_slug: string;
   scope_name: string | null;
   chartData: ChartPoint[];
-  /** Usage series that have at least one day with a positive value for this scope. */
   usageLines: UsageLineConfig[];
   usageAvailable: boolean;
-  /** Sum of `cost_value` for this scope over the selected date range. */
   totalCost: number;
-  /**
-   * Percent change of total cost vs the same-length window immediately before the selected range.
-   * `null` when the previous total is zero (not meaningful).
-   */
   percentVsPrevious: number | null;
 };
 
-/** Keep legend / lines only for metrics that actually have data in this chart. */
 function usageLinesWithData(chartData: ChartPoint[], candidates: UsageLineConfig[]): UsageLineConfig[] {
   return candidates.filter(line =>
     chartData.some(pt => {
@@ -54,16 +54,10 @@ function usageLinesWithData(chartData: ChartPoint[], candidates: UsageLineConfig
   );
 }
 
-type DateRange = {
-  fromDate: string;
-  toDate: string;
-};
-
 const providerTypes: ProviderType[] = ['aws', 'gcp', 'dynatrace', 'other'];
 const costMetrics: CostMetric[] = ['unblended_amount', 'amortized_amount'];
 const QUERY_PARAM = {
-  fromDate: 'from',
-  toDate: 'to',
+  ...DATE_QUERY_PARAM,
   providerTypes: 'providers',
   teamId: 'team',
   scopeSlug: 'scope',
@@ -71,37 +65,16 @@ const QUERY_PARAM = {
   usageMetrics: 'usageMetrics',
 } as const;
 
+/** How far back to query when discovering the latest day that has trend rows. */
+const DATA_PROBE_LOOKBACK_DAYS = 500;
+
 type QueryState = {
-  fromDate: string | null;
-  toDate: string | null;
   providerTypes: ProviderType[] | null;
   teamId: string | null;
   scopeSlug: string | null;
   costMetric: CostMetric | null;
   usageMetrics: UsageMetric[] | null;
 };
-
-function toIsoDate(value: Date): string {
-  return value.toISOString().slice(0, 10);
-}
-
-function startOfMonth(value: Date): Date {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
-}
-
-function endOfMonth(value: Date): Date {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0));
-}
-
-function addDays(value: Date, amount: number): Date {
-  const copy = new Date(value);
-  copy.setUTCDate(copy.getUTCDate() + amount);
-  return copy;
-}
-
-function isIsoDate(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
 
 function parseCsv(value: string | null): string[] {
   if (!value) {
@@ -113,11 +86,9 @@ function parseCsv(value: string | null): string[] {
     .filter(Boolean);
 }
 
-function parseQueryState(): QueryState {
+function parseCraQueryState(): QueryState {
   if (typeof window === 'undefined') {
     return {
-      fromDate: null,
-      toDate: null,
       providerTypes: null,
       teamId: null,
       scopeSlug: null,
@@ -127,8 +98,6 @@ function parseQueryState(): QueryState {
   }
 
   const params = new URLSearchParams(window.location.search);
-  const fromDateRaw = params.get(QUERY_PARAM.fromDate);
-  const toDateRaw = params.get(QUERY_PARAM.toDate);
   const providerTypesRaw = parseCsv(params.get(QUERY_PARAM.providerTypes));
   const usageMetricsRaw = parseCsv(params.get(QUERY_PARAM.usageMetrics));
   const teamIdRaw = params.get(QUERY_PARAM.teamId);
@@ -143,8 +112,6 @@ function parseQueryState(): QueryState {
   );
 
   return {
-    fromDate: fromDateRaw && isIsoDate(fromDateRaw) ? fromDateRaw : null,
-    toDate: toDateRaw && isIsoDate(toDateRaw) ? toDateRaw : null,
     providerTypes: parsedProviderTypes.length > 0 ? parsedProviderTypes : null,
     teamId: teamIdRaw || null,
     scopeSlug: scopeSlugRaw || null,
@@ -153,68 +120,6 @@ function parseQueryState(): QueryState {
         ? (costMetricRaw as CostMetric)
         : null,
     usageMetrics: usageMetricsRaw.length > 0 ? parsedUsageMetrics : null,
-  };
-}
-
-function replaceQueryParams(params: URLSearchParams): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  const nextSearch = params.toString();
-  const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${
-    window.location.hash
-  }`;
-  window.history.replaceState({}, '', nextUrl);
-}
-
-function resolvePresetRange(preset: QuickDatePreset): DateRange {
-  const now = new Date();
-  if (preset === 'current_month') {
-    return {
-      fromDate: toIsoDate(startOfMonth(now)),
-      toDate: toIsoDate(now),
-    };
-  }
-  if (preset === 'last_30_days') {
-    return {
-      fromDate: toIsoDate(addDays(now, -29)),
-      toDate: toIsoDate(now),
-    };
-  }
-  const previousMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  return {
-    fromDate: toIsoDate(startOfMonth(previousMonth)),
-    toDate: toIsoDate(endOfMonth(previousMonth)),
-  };
-}
-
-/** How far back to query when discovering the latest day that has trend rows. */
-const DATA_PROBE_LOOKBACK_DAYS = 500;
-
-function calendarLastSevenDays(): DateRange {
-  const now = new Date();
-  return {
-    fromDate: toIsoDate(addDays(now, -6)),
-    toDate: toIsoDate(now),
-  };
-}
-
-function toUtcDate(value: string): Date {
-  return new Date(`${value}T00:00:00.000Z`);
-}
-
-function previousWindow(range: DateRange): DateRange {
-  const from = toUtcDate(range.fromDate);
-  const to = toUtcDate(range.toDate);
-  const windowDays = Math.max(
-    1,
-    Math.floor((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1,
-  );
-  const previousTo = addDays(from, -1);
-  const previousFrom = addDays(previousTo, -windowDays + 1);
-  return {
-    fromDate: toIsoDate(previousFrom),
-    toDate: toIsoDate(previousTo),
   };
 }
 
@@ -284,16 +189,13 @@ function usageMetricLabel(metric: UsageMetric): string {
 }
 
 export function useFinOpsCraData(dataSource: FinOpsDataSource) {
-  const initialQueryState = useMemo(() => parseQueryState(), []);
+  const initialQueryState = useMemo(() => parseCraQueryState(), []);
   const teamsQuery = useAsync(() => dataSource.getTeams(), [dataSource]);
   const [selectedTeamId, setSelectedTeamId] = useState<string>(initialQueryState.teamId ?? '');
   const metadataQuery = useAsync(
     () => dataSource.getScopes(selectedTeamId || null),
     [dataSource, selectedTeamId],
   );
-  const defaultRange = useMemo(() => resolvePresetRange('last_30_days'), []);
-  const [fromDate, setFromDate] = useState(initialQueryState.fromDate ?? defaultRange.fromDate);
-  const [toDate, setToDate] = useState(initialQueryState.toDate ?? defaultRange.toDate);
   const [selectedProviderTypes, setSelectedProviderTypes] = useState<ProviderType[]>(
     initialQueryState.providerTypes ?? providerTypes,
   );
@@ -304,7 +206,6 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
   const [selectedUsageMetrics, setSelectedUsageMetrics] = useState<UsageMetric[]>(
     initialQueryState.usageMetrics ?? [...ALL_USAGE_METRICS],
   );
-  const [lastSevenDaysOfDataLoading, setLastSevenDaysOfDataLoading] = useState(false);
 
   const costMetricDisplay = useMemo(() => costMetricLabel(costMetric), [costMetric]);
   const usageSeriesConfig = useMemo(
@@ -343,7 +244,6 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
     [scopes, selectedProviderTypes],
   );
 
-  /** `null` = all scopes (API omits `scope`); otherwise a single slug. */
   const scopeSlugForQuery = useMemo((): string | null => {
     if (providerFilteredScopes.length === 0) {
       return null;
@@ -377,16 +277,53 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
     return new Set([scopeSlugForQuery]);
   }, [providerFilteredScopes, scopeSlugForQuery]);
 
-  const range = useMemo(() => ({ fromDate, toDate }), [fromDate, toDate]);
-  const previousRange = useMemo(() => previousWindow(range), [range]);
+  const probeLatestPeriod = useCallback(async (): Promise<string | null> => {
+    if (providerFilteredScopes.length === 0) {
+      return null;
+    }
+    const toProbe = toIsoDate(new Date());
+    const fromProbe = toIsoDate(addDays(new Date(), -DATA_PROBE_LOOKBACK_DAYS));
+    const probe = await dataSource.getCostTrends({
+      fromDate: fromProbe,
+      toDate: toProbe,
+      providerTypes: selectedProviderTypes,
+      scopeSlug: scopeSlugForQuery,
+      teamId: selectedTeamId || null,
+      costMetric,
+      usageMetrics: selectedUsageMetrics,
+    });
+    const periods = [...new Set(probe.map(p => p.period))].filter(Boolean).sort();
+    return periods.length > 0 ? periods[periods.length - 1]! : null;
+  }, [
+    dataSource,
+    scopeSlugForQuery,
+    providerFilteredScopes.length,
+    selectedProviderTypes,
+    selectedTeamId,
+    costMetric,
+    selectedUsageMetrics,
+  ]);
+
+  const dateRange = useFinOpsDateRange({ probeLatestPeriod });
+
+  const queryRangeKey = dateRange.appliedValidation.valid
+    ? `${dateRange.appliedValidation.range.fromDate}|${dateRange.appliedValidation.range.toDate}`
+    : null;
+
+  const previousRange = useMemo(() => {
+    if (!dateRange.appliedValidation.valid) {
+      return null;
+    }
+    return previousWindow(dateRange.appliedValidation.range);
+  }, [dateRange.appliedValidation]);
 
   const trendsQuery = useAsync(async () => {
-    if (providerFilteredScopes.length === 0) {
+    if (providerFilteredScopes.length === 0 || !dateRange.appliedValidation.valid) {
       return [];
     }
     return dataSource.getCostTrends({
-      fromDate,
-      toDate,
+      fromDate: dateRange.appliedValidation.range.fromDate,
+      toDate: dateRange.appliedValidation.range.toDate,
       providerTypes: selectedProviderTypes,
       scopeSlug: scopeSlugForQuery,
       teamId: selectedTeamId || null,
@@ -395,8 +332,7 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
     });
   }, [
     dataSource,
-    fromDate,
-    toDate,
+    queryRangeKey,
     scopeSlugForQuery,
     selectedProviderTypes,
     providerFilteredScopes.length,
@@ -406,7 +342,7 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
   ]);
 
   const previousWindowQuery = useAsync(async () => {
-    if (providerFilteredScopes.length === 0) {
+    if (providerFilteredScopes.length === 0 || !previousRange) {
       return [];
     }
     return dataSource.getCostTrends({
@@ -420,8 +356,8 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
     });
   }, [
     dataSource,
-    previousRange.fromDate,
-    previousRange.toDate,
+    previousRange?.fromDate,
+    previousRange?.toDate,
     scopeSlugForQuery,
     selectedProviderTypes,
     providerFilteredScopes.length,
@@ -506,52 +442,12 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
     return dataSource.getScopeTeamsBySlug(scopeSlugsForTeamQuery);
   }, [dataSource, scopeSlugsKey]);
 
-  function applyQuickPreset(preset: QuickDatePreset): void {
-    const nextRange = resolvePresetRange(preset);
-    setFromDate(nextRange.fromDate);
-    setToDate(nextRange.toDate);
-  }
-
   const applyLastSevenDaysOfData = useCallback(async () => {
     if (providerFilteredScopes.length === 0) {
       return;
     }
-    setLastSevenDaysOfDataLoading(true);
-    try {
-      const toProbe = toIsoDate(new Date());
-      const fromProbe = toIsoDate(addDays(new Date(), -DATA_PROBE_LOOKBACK_DAYS));
-      const probe = await dataSource.getCostTrends({
-        fromDate: fromProbe,
-        toDate: toProbe,
-        providerTypes: selectedProviderTypes,
-        scopeSlug: scopeSlugForQuery,
-        teamId: selectedTeamId || null,
-        costMetric,
-        usageMetrics: selectedUsageMetrics,
-      });
-      const periods = [...new Set(probe.map(p => p.period))].filter(Boolean).sort();
-      if (periods.length === 0) {
-        const fallback = calendarLastSevenDays();
-        setFromDate(fallback.fromDate);
-        setToDate(fallback.toDate);
-        return;
-      }
-      const latest = periods[periods.length - 1]!;
-      const latestUtc = toUtcDate(latest);
-      setFromDate(toIsoDate(addDays(latestUtc, -6)));
-      setToDate(latest);
-    } finally {
-      setLastSevenDaysOfDataLoading(false);
-    }
-  }, [
-    dataSource,
-    scopeSlugForQuery,
-    providerFilteredScopes.length,
-    selectedProviderTypes,
-    selectedTeamId,
-    costMetric,
-    selectedUsageMetrics,
-  ]);
+    await dateRange.applyLastSevenDaysOfData();
+  }, [dateRange, providerFilteredScopes.length]);
 
   function toggleProviderType(providerType: ProviderType): void {
     setSelectedProviderTypes(current => {
@@ -578,8 +474,10 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
 
   useEffect(() => {
     const params = new URLSearchParams();
-    params.set(QUERY_PARAM.fromDate, fromDate);
-    params.set(QUERY_PARAM.toDate, toDate);
+    if (dateRange.appliedValidation.valid) {
+      params.set(QUERY_PARAM.fromDate, dateRange.appliedValidation.range.fromDate);
+      params.set(QUERY_PARAM.toDate, dateRange.appliedValidation.range.toDate);
+    }
     params.set(QUERY_PARAM.providerTypes, selectedProviderTypes.join(','));
     if (selectedTeamId) {
       params.set(QUERY_PARAM.teamId, selectedTeamId);
@@ -591,8 +489,8 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
     params.set(QUERY_PARAM.usageMetrics, selectedUsageMetrics.join(','));
     replaceQueryParams(params);
   }, [
-    fromDate,
-    toDate,
+    dateRange.appliedRange.fromDate,
+    dateRange.appliedRange.toDate,
     selectedProviderTypes,
     selectedTeamId,
     selectedScopeSlug,
@@ -604,20 +502,28 @@ export function useFinOpsCraData(dataSource: FinOpsDataSource) {
     loading:
       teamsQuery.loading ||
       metadataQuery.loading ||
-      trendsQuery.loading ||
-      previousWindowQuery.loading ||
+      (dateRange.appliedValidation.valid && trendsQuery.loading) ||
+      (dateRange.appliedValidation.valid && previousWindowQuery.loading) ||
       scopeTeamsQuery.loading ||
-      lastSevenDaysOfDataLoading,
-    error: teamsQuery.error || metadataQuery.error || trendsQuery.error || previousWindowQuery.error,
+      dateRange.lastSevenDaysOfDataLoading,
+    error:
+      teamsQuery.error ||
+      metadataQuery.error ||
+      (dateRange.appliedValidation.valid ? trendsQuery.error : undefined) ||
+      (dateRange.appliedValidation.valid ? previousWindowQuery.error : undefined),
+    dateRangeMessage: dateRange.dateRangeMessage,
+    isRangeValid: dateRange.isRangeValid,
+    applyDateRange: dateRange.applyDateRange,
+    applyDateRangeDisabled: !dateRange.draftValidation.valid,
     scopeTeamsBySlug: scopeTeamsQuery.value ?? {},
     scopeTeamsAttributionError: scopeTeamsQuery.error,
-    fromDate,
-    toDate,
-    setFromDate,
-    setToDate,
+    fromDate: dateRange.fromDate,
+    toDate: dateRange.toDate,
+    setFromDate: dateRange.setFromDate,
+    setToDate: dateRange.setToDate,
     selectedProviderTypes,
     toggleProviderType,
-    applyQuickPreset,
+    applyQuickPreset: dateRange.applyQuickPreset,
     applyLastSevenDaysOfData,
     selectedScopeSlug,
     setSelectedScopeSlug,

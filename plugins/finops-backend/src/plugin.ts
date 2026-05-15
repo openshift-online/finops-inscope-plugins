@@ -38,6 +38,9 @@ export const finopsPlugin = createBackendPlugin({
             tableFqn: pool.tableFqn(snowflakeConfig.table),
             dimTeamFqn: pool.tableFqn(snowflakeConfig.dimTeamTable),
             bridgeTeamScopeFqn: pool.tableFqn(snowflakeConfig.bridgeTeamScopeTable),
+            awsAccountsHistoricalFqn: pool.tableFqn(
+              snowflakeConfig.awsAccountsHistoricalTable,
+            ),
           });
           router = createFinopsRouter({ repository, logger });
           logger.info('FinOps Snowflake backend API initialized');

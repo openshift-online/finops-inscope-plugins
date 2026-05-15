@@ -7,12 +7,19 @@ import { createFinopsRouter } from './router';
 
 describe('createFinopsRouter', () => {
   let app: express.Express;
+  let repository: Pick<
+    FinopsRepository,
+    | 'listTeams'
+    | 'listScopes'
+    | 'listTeamsForScopes'
+    | 'getTrends'
+    | 'getSummary'
+    | 'getAwsAccountsHistorical'
+    | 'getAwsAccountsLatestPeriod'
+  >;
 
   beforeEach(() => {
-    const repository: Pick<
-      FinopsRepository,
-      'listTeams' | 'listScopes' | 'listTeamsForScopes' | 'getTrends' | 'getSummary'
-    > = {
+    repository = {
       listTeams: jest.fn().mockResolvedValue([]),
       listScopes: jest.fn().mockResolvedValue([]),
       listTeamsForScopes: jest.fn().mockResolvedValue([]),
@@ -27,6 +34,16 @@ describe('createFinopsRouter', () => {
         delta: 0,
         delta_percent: null,
       }),
+      getAwsAccountsHistorical: jest.fn().mockResolvedValue([
+        {
+          period: '2026-01-15',
+          payer_account_id: '022711891673',
+          active_count: 100,
+          closed_count: 1,
+          deleted_count: 0,
+        },
+      ]),
+      getAwsAccountsLatestPeriod: jest.fn().mockResolvedValue({ period: '2026-01-19' }),
     };
 
     const router = createFinopsRouter({
@@ -47,5 +64,30 @@ describe('createFinopsRouter', () => {
     const res = await request(app).get('/api/teams');
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
+  });
+
+  it('returns AWS accounts historical data', async () => {
+    const res = await request(app).get(
+      '/api/aws-accounts/historical?from=2026-01-01&to=2026-01-31',
+    );
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(repository.getAwsAccountsHistorical).toHaveBeenCalledWith({
+      fromDate: '2026-01-01',
+      toDate: '2026-01-31',
+    });
+  });
+
+  it('returns 400 for invalid AWS accounts historical date range', async () => {
+    const res = await request(app).get(
+      '/api/aws-accounts/historical?from=not-a-date&to=2026-01-31',
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('returns AWS accounts latest period', async () => {
+    const res = await request(app).get('/api/aws-accounts/latest-period');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ period: '2026-01-19' });
   });
 });

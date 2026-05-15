@@ -42,9 +42,21 @@ export const finopsRosaPage = PageBlueprint.make({
   },
 });
 
+export const finopsAwsAccountsPage = PageBlueprint.make({
+  name: 'awsAccounts',
+  params: {
+    path: '/finops/aws-accounts',
+    title: 'FinOps AWS Account Tracker',
+    loader: () =>
+      import('./components/FinOpsAwsAccountTrackerPage').then(m => (
+        <m.FinOpsAwsAccountTrackerPage />
+      )),
+  },
+});
+
 export const finopsPlugin = createFrontendPlugin({
   pluginId: 'finops',
-  extensions: [finopsPage, finopsCraPage, finopsRosaPage],
+  extensions: [finopsPage, finopsCraPage, finopsRosaPage, finopsAwsAccountsPage],
   routes: {
     root: rootRouteRef,
   },

@@ -23,6 +23,7 @@ export type FinopsSnowflakeConfig = {
   table: string;
   dimTeamTable: string;
   bridgeTeamScopeTable: string;
+  awsAccountsHistoricalTable: string;
   auth: FinopsSnowflakeAuth;
 };
 
@@ -71,6 +72,9 @@ export function readFinopsSnowflakeConfig(rootConfig: Config): FinopsSnowflakeCo
     dimTeamTable: cfg.getOptionalString('dimTeamTable')?.trim() || 'cra_team_directory',
     bridgeTeamScopeTable:
       cfg.getOptionalString('bridgeTeamScopeTable')?.trim() || 'cra_team_attributed_scopes',
+    awsAccountsHistoricalTable:
+      cfg.getOptionalString('awsAccountsHistoricalTable')?.trim() ||
+      'aws_accounts_historical_count',
     auth,
   };
 }

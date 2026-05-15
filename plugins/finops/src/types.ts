@@ -88,3 +88,26 @@ export type QueryFilters = {
   /** When set, passed as `team` to the CRA API once supported. */
   teamId?: string | null;
 };
+
+export type AwsAccountsHistoricalPoint = {
+  period: string;
+  payer_account_id: string;
+  active_count: number;
+  closed_count: number;
+  deleted_count: number;
+};
+
+export type AwsAccountsChartPoint = {
+  period: string;
+  /** UTC midnight ms; drives proportional time spacing on the chart X-axis. */
+  periodTime: number;
+  active_count: number;
+  closed_count: number;
+  deleted_count: number;
+};
+
+export type AwsAccountsChartModel = {
+  id: string;
+  title: string;
+  chartData: AwsAccountsChartPoint[];
+};

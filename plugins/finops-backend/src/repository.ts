@@ -1,4 +1,7 @@
 import {
+  AwsAccountsHistoricalPoint,
+  AwsAccountsHistoricalQuery,
+  AwsAccountsLatestPeriodResponse,
   Grain,
   Metric,
   ScopeItem,
@@ -29,9 +32,25 @@ function rowValue<T>(row: SnowflakeRow, key: string): T | undefined {
 
 function toDateString(value: unknown): string {
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+    const year = value.getUTCFullYear();
+    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(value.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
-  return String(value ?? '').slice(0, 10);
+  const text = String(value ?? '').trim();
+  const isoPrefix = text.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoPrefix)) {
+    return isoPrefix;
+  }
+  const parsed = Date.parse(text);
+  if (Number.isFinite(parsed)) {
+    const dt = new Date(parsed);
+    const year = dt.getUTCFullYear();
+    const month = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(dt.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return isoPrefix;
 }
 
 function toNumber(value: unknown): number {
@@ -202,17 +221,20 @@ export class FinopsRepository {
   private readonly tableFqn: string;
   private readonly dimTeamFqn: string;
   private readonly bridgeTeamScopeFqn: string;
+  private readonly awsAccountsHistoricalFqn: string;
 
   constructor(options: {
     pool: SnowflakeConnectionPool;
     tableFqn: string;
     dimTeamFqn: string;
     bridgeTeamScopeFqn: string;
+    awsAccountsHistoricalFqn: string;
   }) {
     this.pool = options.pool;
     this.tableFqn = options.tableFqn;
     this.dimTeamFqn = options.dimTeamFqn;
     this.bridgeTeamScopeFqn = options.bridgeTeamScopeFqn;
+    this.awsAccountsHistoricalFqn = options.awsAccountsHistoricalFqn;
   }
 
   async listTeams(): Promise<TeamItem[]> {
@@ -437,6 +459,58 @@ export class FinopsRepository {
       delta,
       delta_percent: deltaPercent,
     };
+  }
+
+  async getAwsAccountsHistorical(
+    query: AwsAccountsHistoricalQuery,
+  ): Promise<AwsAccountsHistoricalPoint[]> {
+    const sql = `
+      with filtered as (
+        select *
+        from ${this.awsAccountsHistoricalFqn}
+        where timestamp::date between ? and ?
+      ),
+      deduped as (
+        select *
+        from filtered
+        qualify row_number() over (
+          partition by payer_account_id, timestamp::date
+          order by run_id desc
+        ) = 1
+      )
+      select
+        timestamp::date as period,
+        payer_account_id,
+        nb_active_accounts as active_count,
+        nb_closed_accounts as closed_count,
+        nb_deleted_accounts as deleted_count
+      from deduped
+      order by period, payer_account_id
+    `;
+    const rows = await this.pool.execute<SnowflakeRow>(sql, [
+      query.fromDate,
+      query.toDate,
+    ]);
+    return rows.map(row => ({
+      period: toDateString(rowValue(row, 'period')),
+      payer_account_id: String(rowValue(row, 'payer_account_id') ?? ''),
+      active_count: toNumber(rowValue(row, 'active_count')),
+      closed_count: toNumber(rowValue(row, 'closed_count')),
+      deleted_count: toNumber(rowValue(row, 'deleted_count')),
+    }));
+  }
+
+  async getAwsAccountsLatestPeriod(): Promise<AwsAccountsLatestPeriodResponse> {
+    const sql = `
+      select max(timestamp)::date as period
+      from ${this.awsAccountsHistoricalFqn}
+    `;
+    const rows = await this.pool.execute<SnowflakeRow>(sql);
+    const periodRaw = rowValue(rows[0], 'period');
+    if (periodRaw === null || periodRaw === undefined) {
+      return { period: null };
+    }
+    return { period: toDateString(periodRaw) };
   }
 }
 

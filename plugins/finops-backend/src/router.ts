@@ -102,6 +102,32 @@ export function createFinopsRouter(options: {
     }
   });
 
+  router.get('/api/aws-accounts/historical', async (req, res) => {
+    const fromDate = typeof req.query.from === 'string' ? req.query.from : '';
+    const toDate = typeof req.query.to === 'string' ? req.query.to : '';
+
+    try {
+      assertDateRange(fromDate, toDate);
+      res.json(await repository.getAwsAccountsHistorical({ fromDate, toDate }));
+    } catch (error) {
+      if (isBadRequest(error)) {
+        res.status(400).json({ detail: detail(error) });
+        return;
+      }
+      logger.error(`Failed to fetch AWS accounts historical: ${detail(error)}`);
+      res.status(500).json({ detail: 'Failed to fetch AWS accounts historical' });
+    }
+  });
+
+  router.get('/api/aws-accounts/latest-period', async (_req, res) => {
+    try {
+      res.json(await repository.getAwsAccountsLatestPeriod());
+    } catch (error) {
+      logger.error(`Failed to fetch AWS accounts latest period: ${detail(error)}`);
+      res.status(500).json({ detail: 'Failed to fetch AWS accounts latest period' });
+    }
+  });
+
   router.get('/api/summary', async (req, res) => {
     const fromDate = typeof req.query.from === 'string' ? req.query.from : '';
     const toDate = typeof req.query.to === 'string' ? req.query.to : '';

@@ -1,4 +1,11 @@
-import type { Metric, QueryFilters, TeamItem, TeamMemberItem, TeamMemberRole } from './types';
+import type {
+  AwsAccountsHistoricalPoint,
+  Metric,
+  QueryFilters,
+  TeamItem,
+  TeamMemberItem,
+  TeamMemberRole,
+} from './types';
 
 export type RawScopeItem = {
   scope_slug: string;
@@ -66,12 +73,27 @@ function buildQuery(filters: QueryFilters): string {
   return params.toString();
 }
 
+function finopsApiUrl(apiBaseUrl: string, path: string): string {
+  return `${apiBaseUrl.replace(/\/$/, '')}${API_PROXY_BASE}${path}`;
+}
+
 export async function fetchJson<T>(
   fetchFn: typeof fetch,
   apiBaseUrl: string,
   path: string,
 ): Promise<T> {
-  const response = await fetchFn(`${apiBaseUrl}${API_PROXY_BASE}${path}`);
+  const url = finopsApiUrl(apiBaseUrl, path);
+  let response: Response;
+  try {
+    response = await fetchFn(url);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `FinOps API unreachable (${reason}). ` +
+        `Check that the Backstage backend is running on ${apiBaseUrl} and that the ` +
+        `\`/finops\` proxy is configured in app-config.yaml.`,
+    );
+  }
   if (!response.ok) {
     let detail = '';
     try {
@@ -164,5 +186,31 @@ export function getSummary(
     fetchFn,
     apiBaseUrl,
     `/api/summary?${params.toString()}`,
+  );
+}
+
+export function getAwsAccountsHistorical(
+  fetchFn: typeof fetch,
+  apiBaseUrl: string,
+  filters: { fromDate: string; toDate: string },
+): Promise<AwsAccountsHistoricalPoint[]> {
+  const params = new URLSearchParams();
+  params.set('from', filters.fromDate);
+  params.set('to', filters.toDate);
+  return fetchJson<AwsAccountsHistoricalPoint[]>(
+    fetchFn,
+    apiBaseUrl,
+    `/api/aws-accounts/historical?${params.toString()}`,
+  );
+}
+
+export function getAwsAccountsLatestPeriod(
+  fetchFn: typeof fetch,
+  apiBaseUrl: string,
+): Promise<{ period: string | null }> {
+  return fetchJson<{ period: string | null }>(
+    fetchFn,
+    apiBaseUrl,
+    '/api/aws-accounts/latest-period',
   );
 }
