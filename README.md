@@ -78,10 +78,10 @@ Each release includes:
 | Artifact | Use |
 |----------|-----|
 | `backstage-finops-frontend.tgz` / `backstage-finops-backend.tgz` | `package` URL in dynamic plugin config |
-| `*.integrity` | `integrity` field (`sha256-<base64>` SRI) |
+| `*.integrity.txt` | `integrity` field (`sha256-<base64>` SRI) |
 | `*.sha256` | Hex checksum for manual verification |
 
-Copy the single-line contents of `backstage-finops-frontend.tgz.integrity` and `backstage-finops-backend.tgz.integrity` into your deployment manifest (`test-extras.yml`, cluster `dynamic-plugins` CR, etc.), and set `package` URLs to `https://github.com/openshift-online/finops-inscope-plugins/releases/download/<tag>/backstage-finops-*.tgz`.
+Copy the single-line contents of `backstage-finops-frontend.tgz.integrity.txt` and `backstage-finops-backend.tgz.integrity.txt` into your deployment manifest (`test-extras.yml`, cluster `dynamic-plugins` CR, etc.), and set `package` URLs to `https://github.com/openshift-online/finops-inscope-plugins/releases/download/<tag>/backstage-finops-*.tgz`.
 
 ### Test the release build locally (before pushing a tag)
 
@@ -91,7 +91,7 @@ Use **Node.js 22** (same as CI). From the repo root, run the same steps as GitHu
 yarn package:dynamic-plugins
 ```
 
-This produces `dist/backstage-finops-frontend.tgz`, `dist/backstage-finops-backend.tgz`, plus `.sha256` and `.integrity` files. The script prints the SRI strings to paste into your dynamic plugin manifest.
+This produces `dist/backstage-finops-frontend.tgz`, `dist/backstage-finops-backend.tgz`, plus `.sha256` and `.integrity.txt` files. The script prints the SRI strings to paste into your dynamic plugin manifest.
 
 Equivalent one-liner:
 

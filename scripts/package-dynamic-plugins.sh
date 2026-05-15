@@ -41,8 +41,8 @@ else
   shasum -a 256 dist/backstage-finops-frontend.tgz > dist/backstage-finops-frontend.tgz.sha256
   shasum -a 256 dist/backstage-finops-backend.tgz > dist/backstage-finops-backend.tgz.sha256
 fi
-echo -n "sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-frontend.tgz | openssl base64 -A)" > dist/backstage-finops-frontend.tgz.integrity
-echo -n "sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-backend.tgz | openssl base64 -A)" > dist/backstage-finops-backend.tgz.integrity
+echo -n "sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-frontend.tgz | openssl base64 -A)" > dist/backstage-finops-frontend.tgz.integrity.txt
+echo -n "sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-backend.tgz | openssl base64 -A)" > dist/backstage-finops-backend.tgz.integrity.txt
 
 echo ""
 echo "Done. Artifacts in dist/:"
@@ -50,5 +50,5 @@ ls -la dist/backstage-finops-*
 
 echo ""
 echo "SRI integrity (paste into dynamic-plugins config):"
-echo "  frontend: $(cat dist/backstage-finops-frontend.tgz.integrity)"
-echo "  backend:  $(cat dist/backstage-finops-backend.tgz.integrity)"
+echo "  frontend: $(cat dist/backstage-finops-frontend.tgz.integrity.txt)"
+echo "  backend:  $(cat dist/backstage-finops-backend.tgz.integrity.txt)"

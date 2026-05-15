@@ -50,21 +50,21 @@ jobs:
         run: |
           sha256sum dist/backstage-finops-frontend.tgz > dist/backstage-finops-frontend.tgz.sha256
           sha256sum dist/backstage-finops-backend.tgz > dist/backstage-finops-backend.tgz.sha256
-          echo -n "sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-frontend.tgz | openssl base64 -A)" > dist/backstage-finops-frontend.tgz.integrity
-          echo -n "sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-backend.tgz | openssl base64 -A)" > dist/backstage-finops-backend.tgz.integrity
+          echo -n "sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-frontend.tgz | openssl base64 -A)" > dist/backstage-finops-frontend.tgz.integrity.txt
+          echo -n "sha256-$(openssl dgst -sha256 -binary dist/backstage-finops-backend.tgz | openssl base64 -A)" > dist/backstage-finops-backend.tgz.integrity.txt
 
       - name: Create GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.ref_name }}
-          name: FinOps dynamic plugins ${{ github.ref_name }}
+          name: Backstage Finops Plugins ${{ github.ref_name }}
           artifacts: >-
             dist/backstage-finops-frontend.tgz,
             dist/backstage-finops-backend.tgz,
             dist/backstage-finops-frontend.tgz.sha256,
             dist/backstage-finops-backend.tgz.sha256,
-            dist/backstage-finops-frontend.tgz.integrity,
-            dist/backstage-finops-backend.tgz.integrity
+            dist/backstage-finops-frontend.tgz.integrity.txt,
+            dist/backstage-finops-backend.tgz.integrity.txt
           generateReleaseNotes: true
           allowUpdates: true

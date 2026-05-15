@@ -1,7 +1,7 @@
 plugins:
   # Frontend artifact from a semver GitHub release (replace v0.2.0 with your tag).
   - package: https://github.com/openshift-online/finops-inscope-plugins/releases/download/v0.2.0/backstage-finops-frontend.tgz
-    # Copy from backstage-finops-frontend.tgz.integrity on the same release (SRI, not hex sha256sum).
+    # Copy from backstage-finops-frontend.tgz.integrity.txt on the same release (SRI, not hex sha256sum).
     integrity: sha256-<frontend-sha256-base64>
     disabled: false
     pluginConfig:
